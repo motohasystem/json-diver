@@ -26,6 +26,7 @@
   const $btnEdit = document.getElementById("btn-edit");
   const $btnUndo = document.getElementById("btn-undo");
   const $btnRedo = document.getElementById("btn-redo");
+  const $depthBar = document.getElementById("depth-bar");
   const $violationBadge = document.getElementById("violation-badge");
   const $schemaInput = document.getElementById("schema-input");
   const $schemaStatus = document.getElementById("schema-status");
@@ -363,6 +364,59 @@
     root.classList.add("root");
     container.appendChild(root);
     scheduleMinimapRedraw();
+    if (container === $tree) renderDepthBar();
+  }
+
+  // ---------- depth toolbar ----------
+
+  // depths where at least one container (object/array) lives
+  function depthsWithContainers(data, cap = 20) {
+    const set = new Set();
+    function walk(v, d) {
+      if (d > cap) return;
+      if (v && typeof v === "object") {
+        set.add(d);
+        if (Array.isArray(v)) for (const item of v) walk(item, d + 1);
+        else for (const val of Object.values(v)) walk(val, d + 1);
+      }
+    }
+    walk(data, 0);
+    return Array.from(set).sort((a, b) => a - b);
+  }
+
+  function renderDepthBar() {
+    if (!$depthBar) return;
+    $depthBar.innerHTML = "";
+    if (state.data === null || state.data === undefined) return;
+    if (typeof state.data !== "object") return;
+    const depths = depthsWithContainers(state.data);
+    const INDENT_PX = 40; // matches .node padding-left
+    for (const d of depths) {
+      const btn = el("button", "depth-btn", String(d));
+      btn.type = "button";
+      btn.style.left = d * INDENT_PX + "px";
+      btn.title = `深さ ${d} のコンテナをまとめて開閉`;
+      btn.addEventListener("click", () => toggleDepth(d));
+      $depthBar.appendChild(btn);
+    }
+  }
+
+  function toggleDepth(depth) {
+    hideTooltip();
+    const containerNodes = [];
+    for (const n of $tree.querySelectorAll(".node")) {
+      let nodeDepth;
+      try { nodeDepth = JSON.parse(n.dataset.path).length; }
+      catch (_) { continue; }
+      if (nodeDepth !== depth) continue;
+      const toggle = n.querySelector(":scope > .row > .toggle");
+      if (toggle && !toggle.classList.contains("empty")) {
+        containerNodes.push(n);
+      }
+    }
+    if (containerNodes.length === 0) return;
+    const anyOpen = containerNodes.some((n) => !n.classList.contains("collapsed"));
+    containerNodes.forEach((n) => n.classList.toggle("collapsed", anyOpen));
   }
 
   // key:    string | number | null (null for root)
@@ -858,6 +912,7 @@
       $tree.innerHTML = ""; setError(""); saveToStorage("");
       $btnDownload.disabled = true;
       revalidate();
+      renderDepthBar();
       return;
     }
     try {
@@ -965,6 +1020,7 @@
     $btnDownload.disabled = true;
     scheduleMinimapRedraw();
     revalidate();
+    renderDepthBar();
     History.reset();
   });
 

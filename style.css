@@ -103,6 +103,35 @@ main { padding: 12px 16px; }
   background: rgba(122, 162, 255, 0.18);
   color: var(--accent);
 }
+
+/* Depth toolbar (column headers) */
+.depth-bar {
+  position: relative;
+  height: 22px;
+  border-bottom: 1px dashed var(--border);
+}
+.depth-bar:empty { display: none; }
+.depth-btn {
+  position: absolute;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: var(--mono);
+  cursor: pointer;
+  height: 20px;
+  min-width: 26px;
+  text-align: center;
+  line-height: 18px;
+  user-select: none;
+}
+.depth-btn:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
 .sidebar {
   width: 230px;
   flex-shrink: 0;
