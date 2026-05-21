@@ -29,7 +29,11 @@
   <div class="content">
     <div class="tree-block">
       <div class="tree-toolbar">
-        <button id="btn-edit" type="button" title="編集モード（D&Dで並べ替え）">Edit</button>
+        <div id="mode-switch" class="mode-switch" data-mode="view" role="group" aria-label="モード切替">
+          <div class="mode-thumb" aria-hidden="true"></div>
+          <button class="mode-opt" data-mode="view" type="button">View</button>
+          <button class="mode-opt" data-mode="edit" type="button">Edit</button>
+        </div>
         <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
         <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
         <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>

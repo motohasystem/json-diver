@@ -23,7 +23,7 @@
   const $btnClear = document.getElementById("btn-clear");
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
-  const $btnEdit = document.getElementById("btn-edit");
+  const $modeSwitch = document.getElementById("mode-switch");
   const $btnUndo = document.getElementById("btn-undo");
   const $btnRedo = document.getElementById("btn-redo");
   const $depthBar = document.getElementById("depth-bar");
@@ -1312,9 +1312,13 @@
   function setEditMode(on) {
     state.editMode = on;
     document.body.classList.toggle("edit-mode", on);
-    $btnEdit.classList.toggle("active", on);
+    $modeSwitch.dataset.mode = on ? "edit" : "view";
   }
-  $btnEdit.addEventListener("click", () => setEditMode(!state.editMode));
+  $modeSwitch.addEventListener("click", (e) => {
+    const opt = e.target.closest && e.target.closest(".mode-opt");
+    if (!opt) return;
+    setEditMode(opt.dataset.mode === "edit");
+  });
 
   // ---------- Undo / Redo history ----------
 
