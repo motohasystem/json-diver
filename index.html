@@ -15,6 +15,7 @@
     <button id="btn-sample" type="button">Sample</button>
     <button id="btn-download" type="button" disabled>Download</button>
     <button id="btn-edit" type="button" title="編集モード（D&Dで並べ替え）">Edit</button>
+    <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>
   </div>
 </header>
 
@@ -39,6 +40,11 @@
           <li><span class="icon t-null">⭕</span><span class="legend-name">null</span><span class="legend-ex val-null">null</span></li>
           <li><span class="icon t-escaped">🪆</span><span class="legend-name">escaped JSON</span><span class="legend-ex val-escaped">click to zoom</span></li>
         </ul>
+      </div>
+      <div class="schema-panel">
+        <div class="schema-title">スキーマ <span class="schema-status" id="schema-status"></span></div>
+        <textarea id="schema-input" placeholder='{ "type": "object", "properties": {...} }' spellcheck="false"></textarea>
+        <div id="schema-error" class="schema-error" hidden></div>
       </div>
       <div class="minimap-wrap">
         <div class="minimap-title">ミニマップ</div>

@@ -24,6 +24,10 @@
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
   const $btnEdit = document.getElementById("btn-edit");
+  const $violationBadge = document.getElementById("violation-badge");
+  const $schemaInput = document.getElementById("schema-input");
+  const $schemaStatus = document.getElementById("schema-status");
+  const $schemaError = document.getElementById("schema-error");
   const $minimap = document.getElementById("minimap");
   const $minimapCanvas = document.getElementById("minimap-canvas");
   const $minimapViewport = document.getElementById("minimap-viewport");
@@ -76,6 +80,168 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
+
+  // ---------- Schema module (minimal JSON Schema validator) ----------
+
+  const Schema = {
+    _root: null,
+
+    set(schemaObj) { Schema._root = schemaObj; },
+    get() { return Schema._root; },
+
+    // Returns array of violations: [{ path: [], message: "..." }]
+    validate(data, schema = Schema._root) {
+      if (!schema) return [];
+      const out = [];
+      Schema._walk(data, schema, [], out, schema, 0);
+      return out;
+    },
+
+    _walk(value, schema, path, out, root, refDepth) {
+      if (!schema || typeof schema !== "object") return;
+
+      if (schema.$ref) {
+        if (refDepth > 16) return;
+        const resolved = Schema._resolveRef(schema.$ref, root);
+        if (resolved) Schema._walk(value, resolved, path, out, root, refDepth + 1);
+        return;
+      }
+
+      // type
+      if (schema.type !== undefined) {
+        const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+        const actual = Schema._typeOf(value);
+        if (!types.some((t) => Schema._typeMatch(actual, t))) {
+          out.push({ path, message: `type expected ${types.join("|")}, got ${actual}` });
+        }
+      }
+
+      // const / enum
+      if ("const" in schema && !Schema._deepEqual(value, schema.const)) {
+        out.push({ path, message: `const mismatch: expected ${JSON.stringify(schema.const)}` });
+      }
+      if (Array.isArray(schema.enum)) {
+        if (!schema.enum.some((v) => Schema._deepEqual(value, v))) {
+          out.push({ path, message: `enum: not one of ${JSON.stringify(schema.enum)}` });
+        }
+      }
+
+      const actualT = Schema._typeOf(value);
+
+      // Object
+      if (actualT === "object") {
+        const props = schema.properties || {};
+        const patternProps = schema.patternProperties || {};
+        const required = schema.required || [];
+        for (const req of required) {
+          if (!(req in value)) {
+            out.push({ path, message: `required property "${req}" missing` });
+          }
+        }
+        for (const key of Object.keys(value)) {
+          if (key in props) {
+            Schema._walk(value[key], props[key], [...path, key], out, root, refDepth);
+            continue;
+          }
+          let matched = false;
+          for (const [pat, sub] of Object.entries(patternProps)) {
+            try {
+              if (new RegExp(pat).test(key)) {
+                Schema._walk(value[key], sub, [...path, key], out, root, refDepth);
+                matched = true;
+              }
+            } catch (_) { /* invalid regex */ }
+          }
+          if (!matched) {
+            const ap = schema.additionalProperties;
+            if (ap === false) {
+              out.push({ path: [...path, key], message: `additional property "${key}" not allowed` });
+            } else if (ap && typeof ap === "object") {
+              Schema._walk(value[key], ap, [...path, key], out, root, refDepth);
+            }
+          }
+        }
+      }
+
+      // Array
+      if (actualT === "array") {
+        if (Array.isArray(schema.prefixItems)) {
+          for (let i = 0; i < value.length; i++) {
+            if (i < schema.prefixItems.length) {
+              Schema._walk(value[i], schema.prefixItems[i], [...path, i], out, root, refDepth);
+            } else if (schema.items && typeof schema.items === "object") {
+              Schema._walk(value[i], schema.items, [...path, i], out, root, refDepth);
+            }
+          }
+        } else if (Array.isArray(schema.items)) {
+          for (let i = 0; i < value.length; i++) {
+            if (i < schema.items.length) {
+              Schema._walk(value[i], schema.items[i], [...path, i], out, root, refDepth);
+            }
+          }
+        } else if (schema.items && typeof schema.items === "object") {
+          for (let i = 0; i < value.length; i++) {
+            Schema._walk(value[i], schema.items, [...path, i], out, root, refDepth);
+          }
+        }
+        if (typeof schema.minItems === "number" && value.length < schema.minItems) {
+          out.push({ path, message: `minItems: ${value.length} < ${schema.minItems}` });
+        }
+        if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
+          out.push({ path, message: `maxItems: ${value.length} > ${schema.maxItems}` });
+        }
+      }
+
+      // oneOf / anyOf — best effort
+      if (Array.isArray(schema.oneOf)) {
+        const passes = schema.oneOf.filter((s) => Schema._passes(value, s, root, refDepth));
+        if (passes.length === 0) {
+          out.push({ path, message: `oneOf: no subschema matches` });
+        }
+      }
+      if (Array.isArray(schema.anyOf)) {
+        if (!schema.anyOf.some((s) => Schema._passes(value, s, root, refDepth))) {
+          out.push({ path, message: `anyOf: no subschema matches` });
+        }
+      }
+    },
+
+    _passes(value, schema, root, refDepth) {
+      const tmp = [];
+      Schema._walk(value, schema, [], tmp, root, refDepth);
+      return tmp.length === 0;
+    },
+
+    _typeOf(v) {
+      if (v === null) return "null";
+      if (Array.isArray(v)) return "array";
+      if (typeof v === "number" && Number.isInteger(v)) return "integer";
+      return typeof v;
+    },
+
+    _typeMatch(actual, expected) {
+      if (actual === expected) return true;
+      if (expected === "number" && actual === "integer") return true;
+      return false;
+    },
+
+    _deepEqual(a, b) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    },
+
+    _resolveRef(ref, root) {
+      if (!ref.startsWith("#")) return null;
+      if (ref === "#") return root;
+      const parts = ref.slice(2).split("/");
+      let cur = root;
+      for (const p of parts) {
+        if (cur == null) return null;
+        const key = p.replaceAll("~1", "/").replaceAll("~0", "~");
+        cur = cur[key];
+      }
+      return cur;
+    },
+  };
 
   // ---------- Path module (pure helpers over state.data) ----------
 
@@ -628,6 +794,7 @@
       state.data = null;
       $tree.innerHTML = ""; setError(""); saveToStorage("");
       $btnDownload.disabled = true;
+      revalidate();
       return;
     }
     try {
@@ -637,6 +804,7 @@
       renderTree(value, $tree);
       saveToStorage(text);
       $btnDownload.disabled = false;
+      revalidate();
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
@@ -732,6 +900,7 @@
     saveToStorage("");
     $btnDownload.disabled = true;
     scheduleMinimapRedraw();
+    revalidate();
   });
 
   // ---------- Edit mode + D&D ----------
@@ -893,6 +1062,7 @@
       $input.value = text;
       saveToStorage(text);
       renderTree(state.data, $tree);
+      revalidate();
     },
 
     end() {
@@ -912,6 +1082,109 @@
     $btnEdit.classList.toggle("active", on);
   }
   $btnEdit.addEventListener("click", () => setEditMode(!state.editMode));
+
+  // ---------- Schema validation wiring ----------
+
+  const STORAGE_KEY_SCHEMA = "json-diver:schema";
+
+  function setSchemaStatus(cls, text) {
+    $schemaStatus.className = "schema-status" + (cls ? " " + cls : "");
+    $schemaStatus.textContent = text || "";
+  }
+
+  function revalidate() {
+    if (!state.schema || state.data === null || state.data === undefined) {
+      state.violations = [];
+    } else {
+      state.violations = Schema.validate(state.data);
+    }
+    applyViolationHighlights();
+    updateViolationBadge();
+  }
+
+  function applyViolationHighlights() {
+    $tree.querySelectorAll(".row-violation").forEach((el) => {
+      el.classList.remove("row-violation");
+      if (el.dataset.violationReason) delete el.dataset.violationReason;
+    });
+    if (state.violations.length === 0) return;
+    const grouped = {};
+    for (const v of state.violations) {
+      const key = JSON.stringify(v.path);
+      (grouped[key] = grouped[key] || []).push(v.message);
+    }
+    $tree.querySelectorAll(".node").forEach((node) => {
+      const msgs = grouped[node.dataset.path];
+      if (!msgs) return;
+      const row = node.querySelector(":scope > .row");
+      if (!row) return;
+      row.classList.add("row-violation");
+      row.title = msgs.join("\n");
+    });
+  }
+
+  function updateViolationBadge() {
+    const n = state.violations.length;
+    if (n === 0) {
+      $violationBadge.hidden = true;
+      return;
+    }
+    $violationBadge.hidden = false;
+    $violationBadge.textContent = `⚠ ${n}`;
+    $violationBadge.title = state.violations
+      .map((v) => `${v.path.length ? "/" + v.path.join("/") : "(root)"}: ${v.message}`)
+      .join("\n");
+  }
+
+  $violationBadge.addEventListener("click", () => {
+    if (state.violations.length === 0) return;
+    const targetKey = JSON.stringify(state.violations[0].path);
+    for (const node of $tree.querySelectorAll(".node")) {
+      if (node.dataset.path !== targetKey) continue;
+      const row = node.querySelector(":scope > .row");
+      if (!row) break;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.remove("flash");
+      void row.offsetWidth;
+      row.classList.add("flash");
+      break;
+    }
+  });
+
+  function applySchemaInput(text) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      Schema.set(null);
+      state.schema = null;
+      $schemaError.hidden = true;
+      setSchemaStatus("", "");
+      try { localStorage.removeItem(STORAGE_KEY_SCHEMA); } catch (_) {}
+      revalidate();
+      return;
+    }
+    try {
+      const parsed = JSON.parse(trimmed);
+      Schema.set(parsed);
+      state.schema = parsed;
+      $schemaError.hidden = true;
+      setSchemaStatus("ok", "OK");
+      try { localStorage.setItem(STORAGE_KEY_SCHEMA, text); } catch (_) {}
+      revalidate();
+    } catch (err) {
+      Schema.set(null);
+      state.schema = null;
+      $schemaError.hidden = false;
+      $schemaError.textContent = err.message;
+      setSchemaStatus("err", "parse error");
+      revalidate();
+    }
+  }
+
+  let schemaTimer = null;
+  $schemaInput.addEventListener("input", () => {
+    clearTimeout(schemaTimer);
+    schemaTimer = setTimeout(() => applySchemaInput($schemaInput.value), 120);
+  });
 
   // Delegated listeners on the main tree only (modals not draggable)
   $tree.addEventListener("dragstart", (e) => {
@@ -1109,7 +1382,16 @@
   // One-time cleanup of legacy storage key (renamed "json-outline" → "json-diver")
   try { localStorage.removeItem("json-outline:lastInput"); } catch (_) {}
 
-  // Restore from previous session
+  // Restore schema from previous session
+  try {
+    const savedSchema = localStorage.getItem(STORAGE_KEY_SCHEMA);
+    if (savedSchema) {
+      $schemaInput.value = savedSchema;
+      applySchemaInput(savedSchema);
+    }
+  } catch (_) { /* storage unavailable */ }
+
+  // Restore JSON from previous session
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
