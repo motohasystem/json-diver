@@ -22,9 +22,19 @@
   const $modalStack = document.getElementById("modal-stack");
   const $btnClear = document.getElementById("btn-clear");
   const $btnSample = document.getElementById("btn-sample");
+  const $btnDownload = document.getElementById("btn-download");
   const $minimap = document.getElementById("minimap");
   const $minimapCanvas = document.getElementById("minimap-canvas");
   const $minimapViewport = document.getElementById("minimap-viewport");
+
+  // ---------- centralized state ----------
+
+  const state = {
+    data: null,       // current parsed JSON (single source of truth)
+    schema: null,     // current parsed schema (added in MVP-3)
+    editMode: false,  // edit toggle (added in MVP-1)
+    violations: [],   // current schema violations (added in MVP-3)
+  };
 
   // ---------- type helpers ----------
 
@@ -66,19 +76,21 @@
     return e;
   }
 
-  function renderTree(value, container) {
+  function renderTree(value, container, basePath = []) {
     container.innerHTML = "";
-    const root = renderNode(null, value, true);
+    const root = renderNode(null, value, true, basePath);
     root.classList.add("root");
     container.appendChild(root);
     scheduleMinimapRedraw();
   }
 
-  // key: string | number | null (null for root)
-  // value: any
+  // key:    string | number | null (null for root)
+  // value:  any
   // isRoot: bool
-  function renderNode(key, value, isRoot) {
+  // path:   (string|number)[] — JSON path from the tree's root to this node
+  function renderNode(key, value, isRoot, path = []) {
     const node = el("div", "node");
+    node.dataset.path = JSON.stringify(path);
     const row = el("div", "row");
     const t = typeOf(value);
 
@@ -141,7 +153,7 @@
     if (isContainer) {
       const children = el("div", "children");
       node.appendChild(children);
-      renderChildren(value, t, children);
+      renderChildren(value, t, children, path);
       attachCollapsedPreview(row, node, value, t);
     }
 
@@ -283,13 +295,15 @@
     return { text: String(value), truncated: false };
   }
 
-  function renderChildren(value, t, container) {
+  function renderChildren(value, t, container, parentPath = []) {
     const entries = t === "array"
       ? value.map((v, i) => [i, v])
       : Object.entries(value);
 
     if (entries.length <= N_INITIAL) {
-      for (const [k, v] of entries) container.appendChild(renderNode(k, v, false));
+      for (const [k, v] of entries) {
+        container.appendChild(renderNode(k, v, false, [...parentPath, k]));
+      }
       return;
     }
 
@@ -299,7 +313,7 @@
       const end = Math.min(shown + count, entries.length);
       for (let i = shown; i < end; i++) {
         const [k, v] = entries[i];
-        const node = renderNode(k, v, false);
+        const node = renderNode(k, v, false, [...parentPath, k]);
         container.insertBefore(node, sentinel);
       }
       shown = end;
@@ -550,16 +564,46 @@
 
   function parseAndRender(text) {
     const trimmed = text.trim();
-    if (!trimmed) { $tree.innerHTML = ""; setError(""); saveToStorage(""); return; }
+    if (!trimmed) {
+      state.data = null;
+      $tree.innerHTML = ""; setError(""); saveToStorage("");
+      $btnDownload.disabled = true;
+      return;
+    }
     try {
       const value = JSON.parse(trimmed);
+      state.data = value;
       setError("");
       renderTree(value, $tree);
       saveToStorage(text);
+      $btnDownload.disabled = false;
     } catch (err) {
       setError("JSON parse error: " + err.message);
+      $btnDownload.disabled = true;
     }
   }
+
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function downloadFilename() {
+    const d = new Date();
+    const date = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
+    const time = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+    return `json-diver-${date}-${time}.json`;
+  }
+
+  $btnDownload.addEventListener("click", () => {
+    const text = $input.value;
+    try { JSON.parse(text); } catch (_) { return; }
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = downloadFilename();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
 
   let inputTimer = null;
   $input.addEventListener("input", () => {
@@ -611,10 +655,12 @@
   });
 
   $btnClear.addEventListener("click", () => {
+    state.data = null;
     $input.value = "";
     $tree.innerHTML = "";
     setError("");
     saveToStorage("");
+    $btnDownload.disabled = true;
     scheduleMinimapRedraw();
   });
 
