@@ -784,20 +784,39 @@
       else if (yPct > 0.75) position = "after";
       else position = "into";
 
-      // "into" requires target to be a container
+      // "into" requires target to be a container; otherwise fall back to "after"
       if (position === "into") {
         const tv = Path.get(state.data, targetPath);
         const tt = typeOf(tv);
         if (tt !== "object" && tt !== "array") position = "after";
       }
 
-      // MVP-1 scope: same-parent only
-      const sourceParent = DnD.source.path.slice(0, -1);
-      const targetParent = position === "into" ? targetPath : targetPath.slice(0, -1);
-      const sameParent = Path.equal(sourceParent, targetParent);
+      // Compute parents
+      const targetParentPath = position === "into" ? targetPath : targetPath.slice(0, -1);
+      const targetParentRef = Path.get(state.data, targetParentPath);
+      const sourceParentRef = Path.parent(state.data, DnD.source.path);
+      const sourceKey = Path.last(DnD.source.path);
+
+      // Cross-type rule (MVP-2): array element → object requires a key name; forbid for now
+      let valid = true;
+      let reason = "";
+      if (Array.isArray(sourceParentRef) && !Array.isArray(targetParentRef)) {
+        valid = false;
+        reason = "array要素はキー名がないためobjectには移動できません";
+      }
+      // Key collision: object → object move where target already has same key
+      if (
+        valid &&
+        !Array.isArray(targetParentRef) &&
+        sourceParentRef !== targetParentRef &&
+        Object.prototype.hasOwnProperty.call(targetParentRef, sourceKey)
+      ) {
+        valid = false;
+        reason = `キー "${sourceKey}" が移動先に既に存在します`;
+      }
 
       DnD.clearIndicators();
-      if (sameParent) {
+      if (valid) {
         const cls =
           position === "into" ? "drop-into" :
           position === "before" ? "drop-line-before" : "drop-line-after";
@@ -807,8 +826,9 @@
         DnD.lastTarget = { rowEl, position, targetPath };
       } else {
         rowEl.classList.add("drop-forbidden");
+        rowEl.title = reason;
         e.dataTransfer.dropEffect = "none";
-        e.preventDefault(); // still preventDefault so dragend fires cleanly
+        e.preventDefault();
         DnD.lastTarget = null;
       }
     },
@@ -816,11 +836,12 @@
     clearIndicators() {
       document
         .querySelectorAll(".drop-line-before, .drop-line-after, .drop-into, .drop-forbidden")
-        .forEach((el) =>
+        .forEach((el) => {
           el.classList.remove(
             "drop-line-before", "drop-line-after", "drop-into", "drop-forbidden"
-          )
-        );
+          );
+          if (el.title) el.removeAttribute("title");
+        });
     },
 
     drop(e) {
@@ -828,28 +849,44 @@
       e.preventDefault();
       const { position, targetPath } = DnD.lastTarget;
 
-      const sourceParent = DnD.source.path.slice(0, -1);
+      const sourceParentRef = Path.parent(state.data, DnD.source.path);
       const sourceKey = Path.last(DnD.source.path);
-      const targetParent =
-        position === "into" ? targetPath : targetPath.slice(0, -1);
-      if (!Path.equal(sourceParent, targetParent)) return;
+      const sourceValue = sourceParentRef[sourceKey];
 
-      const parent = Path.get(state.data, sourceParent);
-      if (Array.isArray(parent)) {
-        const fromIdx = sourceKey;
-        let toIdx;
-        if (position === "into") {
-          toIdx = parent.length;
-        } else {
-          const refIdx = Path.last(targetPath);
-          toIdx = position === "before" ? refIdx : refIdx + 1;
-        }
-        const [item] = parent.splice(fromIdx, 1);
-        if (fromIdx < toIdx) toIdx--;
-        parent.splice(toIdx, 0, item);
+      const targetParentPath =
+        position === "into" ? targetPath : targetPath.slice(0, -1);
+      const targetParentRef = Path.get(state.data, targetParentPath);
+      const targetRefKey = position === "into" ? null : Path.last(targetPath);
+
+      const isSameObjectParent =
+        sourceParentRef === targetParentRef && !Array.isArray(sourceParentRef);
+
+      if (isSameObjectParent) {
+        // Same-object reorder via key list rebuild
+        Path.reorderObject(sourceParentRef, sourceKey, targetRefKey, position);
       } else {
-        const refKey = position === "into" ? null : Path.last(targetPath);
-        Path.reorderObject(parent, sourceKey, refKey, position);
+        // Remove from source first
+        if (Array.isArray(sourceParentRef)) sourceParentRef.splice(sourceKey, 1);
+        else delete sourceParentRef[sourceKey];
+
+        // Insert into target
+        if (Array.isArray(targetParentRef)) {
+          let toIdx;
+          if (position === "into") {
+            toIdx = targetParentRef.length;
+          } else {
+            toIdx = position === "before" ? targetRefKey : targetRefKey + 1;
+            // Same array: adjust if we removed an item before target ref
+            if (sourceParentRef === targetParentRef && sourceKey < toIdx) toIdx--;
+          }
+          targetParentRef.splice(toIdx, 0, sourceValue);
+        } else {
+          // Object target (different parent): set key, then optionally reorder
+          targetParentRef[sourceKey] = sourceValue;
+          if (position !== "into") {
+            Path.reorderObject(targetParentRef, sourceKey, targetRefKey, position);
+          }
+        }
       }
 
       const text = JSON.stringify(state.data, null, 2);
