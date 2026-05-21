@@ -398,6 +398,13 @@
       btn.style.left = d * INDENT_PX + "px";
       btn.title = `深さ ${d} のコンテナをまとめて開閉`;
       btn.addEventListener("click", () => toggleDepth(d));
+      btn.addEventListener("mouseenter", () => {
+        document.documentElement.style.setProperty("--highlight-x", d * INDENT_PX + "px");
+        document.documentElement.style.setProperty("--highlight-opacity", "0.55");
+      });
+      btn.addEventListener("mouseleave", () => {
+        document.documentElement.style.setProperty("--highlight-opacity", "0");
+      });
       $depthBar.appendChild(btn);
     }
   }
