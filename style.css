@@ -110,10 +110,27 @@ main { padding: 12px 16px; }
 /* Depth toolbar (column headers) + continuous vertical guides */
 .depth-bar {
   position: relative;
-  height: 22px;
+  height: 36px;
   border-bottom: 1px dashed var(--border);
 }
 .depth-bar:empty { display: none; }
+
+.depth-col {
+  position: absolute;
+  top: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.depth-label {
+  font-size: 9px;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  line-height: 1;
+  padding-left: 6px;
+  letter-spacing: 0.05em;
+}
 
 /* Vertical guides over the depth bar and tree, every --depth-step */
 .depth-bar,
@@ -144,8 +161,6 @@ main { padding: 12px 16px; }
   z-index: 0;
 }
 .depth-btn {
-  position: absolute;
-  top: 0;
   background: var(--panel-2);
   color: var(--fg-dim);
   border: 1px solid var(--border);
@@ -159,10 +174,23 @@ main { padding: 12px 16px; }
   text-align: center;
   line-height: 18px;
   user-select: none;
+  font-weight: 700;
 }
-.depth-btn:hover {
+.depth-btn:hover { filter: brightness(1.35); }
+.depth-btn.state-open {
   border-color: var(--accent);
-  color: var(--fg);
+  background: rgba(122, 162, 255, 0.22);
+  color: var(--accent);
+}
+.depth-btn.state-mixed {
+  border-color: var(--warn);
+  background: rgba(255, 184, 108, 0.22);
+  color: var(--warn);
+}
+.depth-btn.state-closed {
+  border-color: var(--border);
+  background: var(--panel-2);
+  color: var(--fg-dim);
 }
 .sidebar {
   width: 230px;

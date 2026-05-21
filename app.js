@@ -393,9 +393,14 @@
     // Must match CSS --depth-step (= .node padding-left, currently 40px)
     const INDENT_PX = 40;
     for (const d of depths) {
-      const btn = el("button", "depth-btn", String(d));
+      const col = el("div", "depth-col");
+      col.style.left = d * INDENT_PX + "px";
+      col.dataset.depth = String(d);
+
+      const label = el("div", "depth-label", String(d));
+
+      const btn = el("button", "depth-btn", "0");
       btn.type = "button";
-      btn.style.left = d * INDENT_PX + "px";
       btn.title = `深さ ${d} のコンテナをまとめて開閉`;
       btn.addEventListener("click", () => toggleDepth(d));
       btn.addEventListener("mouseenter", () => {
@@ -407,9 +412,69 @@
         document.documentElement.style.setProperty("--highlight-opacity", "0");
         setDepthHover(d, false);
       });
-      $depthBar.appendChild(btn);
+
+      col.appendChild(label);
+      col.appendChild(btn);
+      $depthBar.appendChild(col);
+    }
+    refreshDepthStates();
+  }
+
+  // Recompute container count + open/mixed/closed state for each depth button
+  function refreshDepthStates() {
+    if (!$depthBar) return;
+    const stats = new Map(); // depth → { count, openCount }
+    for (const n of $tree.querySelectorAll(".node")) {
+      let d;
+      try { d = JSON.parse(n.dataset.path).length; } catch (_) { continue; }
+      const t = n.querySelector(":scope > .row > .toggle");
+      if (!t || t.classList.contains("empty")) continue;
+      if (!stats.has(d)) stats.set(d, { count: 0, openCount: 0 });
+      const s = stats.get(d);
+      s.count++;
+      if (!n.classList.contains("collapsed")) s.openCount++;
+    }
+    for (const col of $depthBar.querySelectorAll(".depth-col")) {
+      const d = parseInt(col.dataset.depth, 10);
+      const btn = col.querySelector(".depth-btn");
+      if (!btn) continue;
+      const s = stats.get(d) || { count: 0, openCount: 0 };
+      btn.textContent = String(s.count);
+      btn.classList.remove("state-open", "state-mixed", "state-closed");
+      if (s.count === 0) {
+        btn.classList.add("state-closed");
+      } else if (s.openCount === s.count) {
+        btn.classList.add("state-open");
+      } else if (s.openCount === 0) {
+        btn.classList.add("state-closed");
+      } else {
+        btn.classList.add("state-mixed");
+      }
+      const stateText = btn.classList.contains("state-open") ? "全展開"
+                      : btn.classList.contains("state-mixed") ? "一部展開"
+                      : "全閉じ";
+      btn.title = `深さ ${d}: コンテナ ${s.count} 個 (${stateText})`;
     }
   }
+
+  // Observe class changes on .node to keep depth button states in sync
+  let depthStateRaf = 0;
+  const depthStateObserver = new MutationObserver((mutations) => {
+    const relevant = mutations.some(
+      (m) => m.target && m.target.classList && m.target.classList.contains("node")
+    );
+    if (!relevant) return;
+    if (depthStateRaf) return;
+    depthStateRaf = requestAnimationFrame(() => {
+      depthStateRaf = 0;
+      refreshDepthStates();
+    });
+  });
+  depthStateObserver.observe($tree, {
+    attributes: true,
+    attributeFilter: ["class"],
+    subtree: true,
+  });
 
   function setDepthHover(depth, on) {
     for (const n of $tree.querySelectorAll(".node")) {
