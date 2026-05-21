@@ -540,7 +540,7 @@
     $error.textContent = msg;
   }
 
-  const STORAGE_KEY = "json-outline:lastInput";
+  const STORAGE_KEY = "json-diver:lastInput";
   function saveToStorage(text) {
     try {
       if (text && text.trim()) localStorage.setItem(STORAGE_KEY, text);
@@ -768,7 +768,7 @@
 
   $btnSample.addEventListener("click", () => {
     const sample = {
-      app: "json-outline",
+      app: "json-diver",
       version: 1,
       enabled: true,
       tags: ["alpha", "beta", "gamma"],
@@ -792,6 +792,9 @@
     $input.value = text;
     parseAndRender(text);
   });
+
+  // One-time cleanup of legacy storage key (renamed "json-outline" → "json-diver")
+  try { localStorage.removeItem("json-outline:lastInput"); } catch (_) {}
 
   // Restore from previous session
   try {

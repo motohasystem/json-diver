@@ -1,4 +1,4 @@
-# JSON Outline
+# JSON Diver
 
 JSONをコピペまたはD&Dすると、ツリー構造の外観を簡易に把握できる解析ツール。
 Vanilla JS + HTML/CSS の単体動作、ビルド不要。
