@@ -409,7 +409,7 @@
 
   // Lightweight non-interactive preview for tooltip
   function buildPreviewHtml(value, depth = 0, maxDepth = 4, maxItems = 20) {
-    const INDENT_PX = 14;
+    const INDENT_PX = 28;
     const pad = depth * INDENT_PX;
     const padIn = pad + INDENT_PX;
     const t = typeOf(value);
