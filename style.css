@@ -17,6 +17,9 @@
   --key: #e6e8ee;
   --escaped: #ffb86c;
   --mono: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+  /* depth-step = .node padding-left (40) + .children margin-left (6) + border (1) */
+  --depth-step: 47px;
+  --depth-guide: rgba(122, 162, 255, 0.10);
 }
 
 * { box-sizing: border-box; }
@@ -104,13 +107,25 @@ main { padding: 12px 16px; }
   color: var(--accent);
 }
 
-/* Depth toolbar (column headers) */
+/* Depth toolbar (column headers) + continuous vertical guides */
 .depth-bar {
   position: relative;
   height: 22px;
   border-bottom: 1px dashed var(--border);
 }
 .depth-bar:empty { display: none; }
+
+/* Vertical guides over the depth bar and tree, every --depth-step */
+.depth-bar,
+.tree-block > .tree {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--depth-step) - 1px),
+    var(--depth-guide) calc(var(--depth-step) - 1px),
+    var(--depth-guide) var(--depth-step)
+  );
+}
 .depth-btn {
   position: absolute;
   top: 0;

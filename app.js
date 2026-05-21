@@ -390,7 +390,8 @@
     if (state.data === null || state.data === undefined) return;
     if (typeof state.data !== "object") return;
     const depths = depthsWithContainers(state.data);
-    const INDENT_PX = 40; // matches .node padding-left
+    // Must match CSS --depth-step (node padding 40 + children margin 6 + border 1)
+    const INDENT_PX = 47;
     for (const d of depths) {
       const btn = el("button", "depth-btn", String(d));
       btn.type = "button";
