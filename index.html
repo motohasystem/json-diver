@@ -10,12 +10,6 @@
 <body>
 <header class="topbar">
   <h1><img class="logo" src="favicon.svg" alt="" width="20" height="20"> JSON Diver</h1>
-  <div class="actions">
-    <button id="btn-edit" type="button" title="編集モード（D&Dで並べ替え）">Edit</button>
-    <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
-    <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
-    <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>
-  </div>
 </header>
 
 <main>
@@ -33,7 +27,15 @@
   </section>
 
   <div class="content">
-    <section id="tree" class="tree" aria-label="JSON tree"></section>
+    <div class="tree-block">
+      <div class="tree-toolbar">
+        <button id="btn-edit" type="button" title="編集モード（D&Dで並べ替え）">Edit</button>
+        <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
+        <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>
+      </div>
+      <section id="tree" class="tree" aria-label="JSON tree"></section>
+    </div>
     <aside class="sidebar" aria-label="Reference">
       <div class="legend">
         <div class="legend-title">型アイコン</div>

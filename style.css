@@ -72,7 +72,37 @@ main { padding: 12px 16px; }
   align-items: flex-start;
   gap: 16px;
 }
-.content > .tree { flex: 1; min-width: 0; overflow-x: auto; }
+.content > .tree-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tree-block > .tree { overflow-x: auto; }
+.tree-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.tree-toolbar button {
+  background: var(--panel-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tree-toolbar button:hover { border-color: var(--accent); }
+.tree-toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+.tree-toolbar button:disabled:hover { border-color: var(--border); }
+.tree-toolbar button.active {
+  border-color: var(--accent);
+  background: rgba(122, 162, 255, 0.18);
+  color: var(--accent);
+}
 .sidebar {
   width: 230px;
   flex-shrink: 0;
