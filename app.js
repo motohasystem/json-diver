@@ -31,6 +31,14 @@
   const $minimap = document.getElementById("minimap");
   const $minimapCanvas = document.getElementById("minimap-canvas");
   const $minimapViewport = document.getElementById("minimap-viewport");
+  const $toast = document.getElementById("toast");
+
+  function showToast(msg, ms = 4000) {
+    $toast.hidden = false;
+    $toast.textContent = msg;
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => { $toast.hidden = true; }, ms);
+  }
 
   // ---------- centralized state ----------
 
@@ -1091,8 +1099,29 @@
       e.preventDefault();
       const { position, targetPath } = DnD.lastTarget;
 
-      applyMove(state.data, DnD.source.path, targetPath, position);
+      // Two-stage defense: try on a draft first, only commit if schema OK
+      let draft;
+      try { draft = structuredClone(state.data); }
+      catch (_) { draft = JSON.parse(JSON.stringify(state.data)); }
 
+      try {
+        applyMove(draft, DnD.source.path, targetPath, position);
+      } catch (err) {
+        showToast(`移動に失敗しました: ${err.message}`);
+        return;
+      }
+
+      if (state.schema) {
+        const oldCount = state.violations.length;
+        const newCount = Schema.validate(draft).length;
+        if (newCount > oldCount) {
+          showToast(`スキーマ違反が増加するためロールバックしました（${oldCount} → ${newCount}）`);
+          return;
+        }
+      }
+
+      // Commit
+      state.data = draft;
       const text = JSON.stringify(state.data, null, 2);
       $input.value = text;
       saveToStorage(text);
