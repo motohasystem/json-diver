@@ -401,11 +401,26 @@
       btn.addEventListener("mouseenter", () => {
         document.documentElement.style.setProperty("--highlight-x", d * INDENT_PX + "px");
         document.documentElement.style.setProperty("--highlight-opacity", "0.55");
+        setDepthHover(d, true);
       });
       btn.addEventListener("mouseleave", () => {
         document.documentElement.style.setProperty("--highlight-opacity", "0");
+        setDepthHover(d, false);
       });
       $depthBar.appendChild(btn);
+    }
+  }
+
+  function setDepthHover(depth, on) {
+    for (const n of $tree.querySelectorAll(".node")) {
+      let nodeDepth;
+      try { nodeDepth = JSON.parse(n.dataset.path).length; }
+      catch (_) { continue; }
+      if (nodeDepth !== depth) continue;
+      const toggle = n.querySelector(":scope > .row > .toggle");
+      if (!toggle || toggle.classList.contains("empty")) continue;
+      const row = n.querySelector(":scope > .row");
+      if (row) row.classList.toggle("depth-hover", on);
     }
   }
 
