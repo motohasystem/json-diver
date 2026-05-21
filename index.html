@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSON Outline</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>JSON Outline</h1>
+  <div class="actions">
+    <button id="btn-clear" type="button">Clear</button>
+    <button id="btn-sample" type="button">Sample</button>
+  </div>
+</header>
+
+<main>
+  <section id="dropzone" class="dropzone">
+    <p class="dropzone-hint">JSONをここにドロップ／貼り付け（Ctrl+V）／下のテキストエリアに入力</p>
+    <textarea id="input" placeholder='{"foo": 1, "bar": [1,2,3]}' spellcheck="false"></textarea>
+    <div id="error" class="error" hidden></div>
+  </section>
+
+  <div class="content">
+    <section id="tree" class="tree" aria-label="JSON tree"></section>
+    <aside class="sidebar" aria-label="Reference">
+      <div class="legend">
+        <div class="legend-title">型アイコン</div>
+        <ul class="legend-list">
+          <li><span class="icon t-object">{}</span><span class="legend-name">object</span><span class="legend-ex">{}, {3}</span></li>
+          <li><span class="icon t-array">[]</span><span class="legend-name">array</span><span class="legend-ex">[], [3]</span></li>
+          <li><span class="icon t-string">🔤</span><span class="legend-name">string</span><span class="legend-ex val-string">"hello"</span></li>
+          <li><span class="icon t-number">🔢</span><span class="legend-name">number</span><span class="legend-ex val-number">42</span></li>
+          <li><span class="icon t-boolean">☑</span><span class="legend-name">boolean</span><span class="legend-ex val-boolean">true</span></li>
+          <li><span class="icon t-null">⭕</span><span class="legend-name">null</span><span class="legend-ex val-null">null</span></li>
+          <li><span class="icon t-escaped">🪆</span><span class="legend-name">escaped JSON</span><span class="legend-ex val-escaped">click to zoom</span></li>
+        </ul>
+      </div>
+      <div class="minimap-wrap">
+        <div class="minimap-title">ミニマップ</div>
+        <div class="minimap" id="minimap">
+          <canvas id="minimap-canvas"></canvas>
+          <div class="minimap-viewport" id="minimap-viewport"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+<div id="modal-stack" class="modal-stack" aria-hidden="true"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
