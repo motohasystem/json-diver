@@ -11,9 +11,6 @@
 <header class="topbar">
   <h1><img class="logo" src="favicon.svg" alt="" width="20" height="20"> JSON Diver</h1>
   <div class="actions">
-    <button id="btn-clear" type="button">Clear</button>
-    <button id="btn-sample" type="button">Sample</button>
-    <button id="btn-download" type="button" disabled>Download</button>
     <button id="btn-edit" type="button" title="編集モード（D&Dで並べ替え）">Edit</button>
     <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
@@ -23,7 +20,14 @@
 
 <main>
   <section id="dropzone" class="dropzone">
-    <p class="dropzone-hint">JSONをここにドロップ／貼り付け（Ctrl+V）／下のテキストエリアに入力</p>
+    <div class="dropzone-head">
+      <p class="dropzone-hint">JSONをここにドロップ／貼り付け（Ctrl+V）／下のテキストエリアに入力</p>
+      <div class="dropzone-actions">
+        <button id="btn-clear" type="button">Clear</button>
+        <button id="btn-sample" type="button">Sample</button>
+        <button id="btn-download" type="button" disabled>Download</button>
+      </div>
+    </div>
     <textarea id="input" placeholder='{"foo": 1, "bar": [1,2,3]}' spellcheck="false"></textarea>
     <div id="error" class="error" hidden></div>
   </section>

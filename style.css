@@ -92,7 +92,31 @@ main { padding: 12px 16px; }
   transition: border-color 0.15s, background 0.15s;
 }
 .dropzone.dragover { border-color: var(--accent); background: var(--panel-2); }
-.dropzone-hint { margin: 0 0 8px; color: var(--fg-dim); font-size: 12px; }
+.dropzone-hint { margin: 0; color: var(--fg-dim); font-size: 12px; }
+.dropzone-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dropzone-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dropzone-actions button {
+  background: var(--panel-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dropzone-actions button:hover { border-color: var(--accent); }
+.dropzone-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.dropzone-actions button:disabled:hover { border-color: var(--border); }
 #input {
   width: 100%;
   min-height: 60px;
