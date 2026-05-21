@@ -17,8 +17,8 @@
   --key: #e6e8ee;
   --escaped: #ffb86c;
   --mono: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
-  /* depth-step = .node padding-left (40) + .children margin-left (6) + border (1) */
-  --depth-step: 47px;
+  /* depth-step = .node padding-left (no more .children margin/border) */
+  --depth-step: 40px;
   --depth-guide: rgba(122, 162, 255, 0.10);
 }
 
@@ -452,8 +452,8 @@ body.dnd-active { user-select: none; }
 .val.escaped-link:hover { background: rgba(255,184,108,0.08); }
 
 .children {
-  border-left: 1px dotted var(--border);
-  margin-left: 6px;
+  /* Visual guide is provided by the repeating gradient on .tree
+     (see --depth-step). No per-children border to avoid doubled lines. */
 }
 
 .lazy-sentinel {
