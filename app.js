@@ -24,6 +24,8 @@
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
   const $btnEdit = document.getElementById("btn-edit");
+  const $btnUndo = document.getElementById("btn-undo");
+  const $btnRedo = document.getElementById("btn-redo");
   const $violationBadge = document.getElementById("violation-badge");
   const $schemaInput = document.getElementById("schema-input");
   const $schemaStatus = document.getElementById("schema-status");
@@ -866,6 +868,7 @@
       saveToStorage(text);
       $btnDownload.disabled = false;
       revalidate();
+      History.reset();
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
@@ -962,6 +965,7 @@
     $btnDownload.disabled = true;
     scheduleMinimapRedraw();
     revalidate();
+    History.reset();
   });
 
   // ---------- Edit mode + D&D ----------
@@ -1120,7 +1124,8 @@
         }
       }
 
-      // Commit
+      // Commit (with undo history)
+      History.pushBefore(state.data);
       state.data = draft;
       const text = JSON.stringify(state.data, null, 2);
       $input.value = text;
@@ -1147,6 +1152,88 @@
     $btnEdit.classList.toggle("active", on);
   }
   $btnEdit.addEventListener("click", () => setEditMode(!state.editMode));
+
+  // ---------- Undo / Redo history ----------
+
+  function cloneData(d) {
+    try { return structuredClone(d); }
+    catch (_) { return JSON.parse(JSON.stringify(d)); }
+  }
+
+  const History = {
+    past: [],
+    future: [],
+    MAX: 50,
+
+    pushBefore(currentData) {
+      History.past.push(cloneData(currentData));
+      if (History.past.length > History.MAX) History.past.shift();
+      History.future = [];
+      History.updateUI();
+    },
+
+    undo() {
+      if (History.past.length === 0) return undefined;
+      History.future.push(cloneData(state.data));
+      const prev = History.past.pop();
+      History.updateUI();
+      return prev;
+    },
+
+    redo() {
+      if (History.future.length === 0) return undefined;
+      History.past.push(cloneData(state.data));
+      const next = History.future.pop();
+      History.updateUI();
+      return next;
+    },
+
+    reset() {
+      History.past = [];
+      History.future = [];
+      History.updateUI();
+    },
+
+    updateUI() {
+      $btnUndo.disabled = History.past.length === 0;
+      $btnRedo.disabled = History.future.length === 0;
+    },
+  };
+
+  function commitState(newData) {
+    state.data = newData;
+    const text = JSON.stringify(state.data, null, 2);
+    $input.value = text;
+    saveToStorage(text);
+    renderTree(state.data, $tree);
+    revalidate();
+  }
+
+  $btnUndo.addEventListener("click", () => {
+    const prev = History.undo();
+    if (prev !== undefined) commitState(prev);
+  });
+  $btnRedo.addEventListener("click", () => {
+    const next = History.redo();
+    if (next !== undefined) commitState(next);
+  });
+
+  // Keyboard shortcuts (only when focus is not in a text input)
+  document.addEventListener("keydown", (e) => {
+    const tag = e.target && e.target.tagName;
+    if (tag === "TEXTAREA" || tag === "INPUT") return;
+    const isMac = /Mac/.test(navigator.platform);
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (!mod) return;
+    const key = e.key.toLowerCase();
+    if (key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      $btnUndo.click();
+    } else if ((key === "z" && e.shiftKey) || key === "y") {
+      e.preventDefault();
+      $btnRedo.click();
+    }
+  });
 
   // ---------- Schema validation wiring ----------
 
