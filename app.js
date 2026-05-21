@@ -23,6 +23,7 @@
   const $btnClear = document.getElementById("btn-clear");
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
+  const $btnEdit = document.getElementById("btn-edit");
   const $minimap = document.getElementById("minimap");
   const $minimapCanvas = document.getElementById("minimap-canvas");
   const $minimapViewport = document.getElementById("minimap-viewport");
@@ -76,6 +77,57 @@
     return e;
   }
 
+  // ---------- Path module (pure helpers over state.data) ----------
+
+  const Path = {
+    get(obj, path) {
+      let cur = obj;
+      for (const k of path) {
+        if (cur == null) return undefined;
+        cur = cur[k];
+      }
+      return cur;
+    },
+    parent(obj, path) {
+      return Path.get(obj, path.slice(0, -1));
+    },
+    last(path) { return path[path.length - 1]; },
+    equal(a, b) {
+      return a.length === b.length && a.every((v, i) => v === b[i]);
+    },
+    isPrefix(prefix, path) {
+      if (prefix.length >= path.length) return false;
+      return prefix.every((v, i) => v === path[i]);
+    },
+    removeAt(obj, path) {
+      if (path.length === 0) return;
+      const parent = Path.parent(obj, path);
+      const last = Path.last(path);
+      if (Array.isArray(parent)) parent.splice(last, 1);
+      else delete parent[last];
+    },
+    // For arrays: in-place splice insert at idx
+    // For objects: rebuild keys with `key` inserted before/after `refKey`, or appended on "into"
+    reorderObject(obj, sourceKey, refKey, position) {
+      const sourceVal = obj[sourceKey];
+      const entries = Object.entries(obj).filter(([k]) => k !== sourceKey);
+      const newOrder = [];
+      if (position === "into" || refKey == null) {
+        // append at end
+        for (const e of entries) newOrder.push(e);
+        newOrder.push([sourceKey, sourceVal]);
+      } else {
+        for (const [k, v] of entries) {
+          if (k === refKey && position === "before") newOrder.push([sourceKey, sourceVal]);
+          newOrder.push([k, v]);
+          if (k === refKey && position === "after") newOrder.push([sourceKey, sourceVal]);
+        }
+      }
+      for (const k of Object.keys(obj)) delete obj[k];
+      for (const [k, v] of newOrder) obj[k] = v;
+    },
+  };
+
   function renderTree(value, container, basePath = []) {
     container.innerHTML = "";
     const root = renderNode(null, value, true, basePath);
@@ -93,6 +145,14 @@
     node.dataset.path = JSON.stringify(path);
     const row = el("div", "row");
     const t = typeOf(value);
+
+    // drag handle (rendered always; CSS shows only in edit mode; root has no handle)
+    if (!isRoot) {
+      const handle = el("span", "handle", "⋮⋮");
+      handle.draggable = true;
+      handle.title = "ドラッグして移動";
+      row.appendChild(handle);
+    }
 
     const isContainer = t === "object" || t === "array";
     const toggle = el("span", "toggle");
@@ -622,21 +682,31 @@
     }
   });
 
-  // drag & drop
+  // drag & drop (file / text into the dropzone — ignore in-app row D&D)
+  const isRowDnd = (e) =>
+    (e.dataTransfer && e.dataTransfer.types &&
+      Array.from(e.dataTransfer.types).includes("application/x-json-diver-path"));
+
   ["dragenter", "dragover"].forEach((ev) => {
     $dropzone.addEventListener(ev, (e) => {
+      if (isRowDnd(e)) return;
       e.preventDefault();
       $dropzone.classList.add("dragover");
     });
-    document.addEventListener(ev, (e) => e.preventDefault());
+    document.addEventListener(ev, (e) => {
+      if (isRowDnd(e)) return;
+      e.preventDefault();
+    });
   });
   ["dragleave", "drop"].forEach((ev) => {
     $dropzone.addEventListener(ev, (e) => {
+      if (isRowDnd(e)) return;
       e.preventDefault();
       $dropzone.classList.remove("dragover");
     });
   });
   $dropzone.addEventListener("drop", async (e) => {
+    if (isRowDnd(e)) return;
     e.preventDefault();
     const dt = e.dataTransfer;
     if (!dt) return;
@@ -663,6 +733,166 @@
     $btnDownload.disabled = true;
     scheduleMinimapRedraw();
   });
+
+  // ---------- Edit mode + D&D ----------
+
+  const DnD = {
+    source: null,      // { path, node }
+    lastTarget: null,  // { rowEl, position, targetPath }
+
+    start(handle, e) {
+      if (!state.editMode) { e.preventDefault(); return; }
+      const node = handle.closest(".node");
+      if (!node || !node.dataset.path) { e.preventDefault(); return; }
+      const path = JSON.parse(node.dataset.path);
+      if (path.length === 0) { e.preventDefault(); return; } // root undraggable
+      DnD.source = { path, node };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("application/x-json-diver-path", JSON.stringify(path));
+      e.dataTransfer.setData("text/plain", ""); // some browsers need a text/plain entry
+      document.body.classList.add("dnd-active");
+      node.classList.add("dragging");
+      hideTooltip();
+    },
+
+    hover(rowEl, e) {
+      if (!DnD.source) return;
+      const targetNode = rowEl.closest(".node");
+      if (!targetNode || targetNode === DnD.source.node) {
+        DnD.clearIndicators();
+        DnD.lastTarget = null;
+        return;
+      }
+      if (!targetNode.dataset.path) return;
+      const targetPath = JSON.parse(targetNode.dataset.path);
+
+      // Self-containment: cannot drop source into its own descendant
+      if (Path.isPrefix(DnD.source.path, targetPath)) {
+        DnD.clearIndicators();
+        rowEl.classList.add("drop-forbidden");
+        e.dataTransfer.dropEffect = "none";
+        e.preventDefault();
+        DnD.lastTarget = null;
+        return;
+      }
+
+      // Determine drop zone by Y position (before / into / after)
+      const rect = rowEl.getBoundingClientRect();
+      const yPct = (e.clientY - rect.top) / rect.height;
+      let position;
+      if (yPct < 0.25) position = "before";
+      else if (yPct > 0.75) position = "after";
+      else position = "into";
+
+      // "into" requires target to be a container
+      if (position === "into") {
+        const tv = Path.get(state.data, targetPath);
+        const tt = typeOf(tv);
+        if (tt !== "object" && tt !== "array") position = "after";
+      }
+
+      // MVP-1 scope: same-parent only
+      const sourceParent = DnD.source.path.slice(0, -1);
+      const targetParent = position === "into" ? targetPath : targetPath.slice(0, -1);
+      const sameParent = Path.equal(sourceParent, targetParent);
+
+      DnD.clearIndicators();
+      if (sameParent) {
+        const cls =
+          position === "into" ? "drop-into" :
+          position === "before" ? "drop-line-before" : "drop-line-after";
+        rowEl.classList.add(cls);
+        e.dataTransfer.dropEffect = "move";
+        e.preventDefault();
+        DnD.lastTarget = { rowEl, position, targetPath };
+      } else {
+        rowEl.classList.add("drop-forbidden");
+        e.dataTransfer.dropEffect = "none";
+        e.preventDefault(); // still preventDefault so dragend fires cleanly
+        DnD.lastTarget = null;
+      }
+    },
+
+    clearIndicators() {
+      document
+        .querySelectorAll(".drop-line-before, .drop-line-after, .drop-into, .drop-forbidden")
+        .forEach((el) =>
+          el.classList.remove(
+            "drop-line-before", "drop-line-after", "drop-into", "drop-forbidden"
+          )
+        );
+    },
+
+    drop(e) {
+      if (!DnD.source || !DnD.lastTarget) return;
+      e.preventDefault();
+      const { position, targetPath } = DnD.lastTarget;
+
+      const sourceParent = DnD.source.path.slice(0, -1);
+      const sourceKey = Path.last(DnD.source.path);
+      const targetParent =
+        position === "into" ? targetPath : targetPath.slice(0, -1);
+      if (!Path.equal(sourceParent, targetParent)) return;
+
+      const parent = Path.get(state.data, sourceParent);
+      if (Array.isArray(parent)) {
+        const fromIdx = sourceKey;
+        let toIdx;
+        if (position === "into") {
+          toIdx = parent.length;
+        } else {
+          const refIdx = Path.last(targetPath);
+          toIdx = position === "before" ? refIdx : refIdx + 1;
+        }
+        const [item] = parent.splice(fromIdx, 1);
+        if (fromIdx < toIdx) toIdx--;
+        parent.splice(toIdx, 0, item);
+      } else {
+        const refKey = position === "into" ? null : Path.last(targetPath);
+        Path.reorderObject(parent, sourceKey, refKey, position);
+      }
+
+      const text = JSON.stringify(state.data, null, 2);
+      $input.value = text;
+      saveToStorage(text);
+      renderTree(state.data, $tree);
+    },
+
+    end() {
+      DnD.clearIndicators();
+      if (DnD.source && DnD.source.node) {
+        DnD.source.node.classList.remove("dragging");
+      }
+      document.body.classList.remove("dnd-active");
+      DnD.source = null;
+      DnD.lastTarget = null;
+    },
+  };
+
+  function setEditMode(on) {
+    state.editMode = on;
+    document.body.classList.toggle("edit-mode", on);
+    $btnEdit.classList.toggle("active", on);
+  }
+  $btnEdit.addEventListener("click", () => setEditMode(!state.editMode));
+
+  // Delegated listeners on the main tree only (modals not draggable)
+  $tree.addEventListener("dragstart", (e) => {
+    const handle = e.target.closest && e.target.closest(".handle");
+    if (!handle) return;
+    DnD.start(handle, e);
+  });
+  $tree.addEventListener("dragover", (e) => {
+    const row = e.target.closest && e.target.closest(".row");
+    if (!row) return;
+    DnD.hover(row, e);
+  });
+  $tree.addEventListener("drop", (e) => DnD.drop(e));
+  $tree.addEventListener("dragleave", (e) => {
+    if (e.relatedTarget && $tree.contains(e.relatedTarget)) return;
+    DnD.clearIndicators();
+  });
+  document.addEventListener("dragend", () => DnD.end());
 
   // ---------- minimap (reusable factory) ----------
 
