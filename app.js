@@ -426,20 +426,39 @@
 
   function toggleDepth(depth) {
     hideTooltip();
-    const containerNodes = [];
+    // Gather containers by depth in one pass
+    const byDepth = new Map(); // depth → [.node, ...] for containers only
     for (const n of $tree.querySelectorAll(".node")) {
-      let nodeDepth;
-      try { nodeDepth = JSON.parse(n.dataset.path).length; }
+      let d;
+      try { d = JSON.parse(n.dataset.path).length; }
       catch (_) { continue; }
-      if (nodeDepth !== depth) continue;
       const toggle = n.querySelector(":scope > .row > .toggle");
-      if (toggle && !toggle.classList.contains("empty")) {
-        containerNodes.push(n);
-      }
+      if (!toggle || toggle.classList.contains("empty")) continue;
+      if (!byDepth.has(d)) byDepth.set(d, []);
+      byDepth.get(d).push(n);
     }
-    if (containerNodes.length === 0) return;
-    const anyOpen = containerNodes.some((n) => !n.classList.contains("collapsed"));
-    containerNodes.forEach((n) => n.classList.toggle("collapsed", anyOpen));
+    const targetContainers = byDepth.get(depth) || [];
+    if (targetContainers.length === 0) return;
+
+    // Any target currently visible AND open? offsetParent === null when an
+    // ancestor is collapsed (CSS hides .collapsed > .children).
+    const anyVisibleAndOpen = targetContainers.some(
+      (n) => n.offsetParent !== null && !n.classList.contains("collapsed")
+    );
+
+    if (anyVisibleAndOpen) {
+      // Collapse all target containers; leave ancestors as-is
+      targetContainers.forEach((n) => n.classList.add("collapsed"));
+    } else {
+      // Open the full path so the target depth becomes visible,
+      // then open the target containers themselves
+      for (let d = 0; d < depth; d++) {
+        const list = byDepth.get(d);
+        if (!list) continue;
+        list.forEach((n) => n.classList.remove("collapsed"));
+      }
+      targetContainers.forEach((n) => n.classList.remove("collapsed"));
+    }
   }
 
   // key:    string | number | null (null for root)
