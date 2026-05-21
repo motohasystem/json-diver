@@ -229,6 +229,19 @@
       return JSON.stringify(a) === JSON.stringify(b);
     },
 
+    // Would moving sourcePath → (targetPath, position) keep the violation count from rising?
+    // Uses the current Schema._root.
+    canPlace(data, sourcePath, targetPath, position, currentViolationCount) {
+      if (!Schema._root) return true;
+      let draft;
+      try { draft = structuredClone(data); }
+      catch (_) { draft = JSON.parse(JSON.stringify(data)); }
+      try { applyMove(draft, sourcePath, targetPath, position); }
+      catch (_) { return false; }
+      const after = Schema.validate(draft).length;
+      return after <= currentViolationCount;
+    },
+
     _resolveRef(ref, root) {
       if (!ref.startsWith("#")) return null;
       if (ref === "#") return root;
@@ -242,6 +255,46 @@
       return cur;
     },
   };
+
+  // Apply a D&D move to a data object in-place.
+  // `position` is "before" | "into" | "after" relative to targetPath.
+  function applyMove(data, sourcePath, targetPath, position) {
+    const sourceParent = Path.parent(data, sourcePath);
+    const sourceKey = Path.last(sourcePath);
+    const sourceValue = sourceParent[sourceKey];
+
+    const targetParentPath =
+      position === "into" ? targetPath : targetPath.slice(0, -1);
+    const targetParentRef = Path.get(data, targetParentPath);
+    const targetRefKey = position === "into" ? null : Path.last(targetPath);
+
+    const isSameObjectParent =
+      sourceParent === targetParentRef && !Array.isArray(sourceParent);
+
+    if (isSameObjectParent) {
+      Path.reorderObject(sourceParent, sourceKey, targetRefKey, position);
+      return;
+    }
+
+    if (Array.isArray(sourceParent)) sourceParent.splice(sourceKey, 1);
+    else delete sourceParent[sourceKey];
+
+    if (Array.isArray(targetParentRef)) {
+      let toIdx;
+      if (position === "into") {
+        toIdx = targetParentRef.length;
+      } else {
+        toIdx = position === "before" ? targetRefKey : targetRefKey + 1;
+        if (sourceParent === targetParentRef && sourceKey < toIdx) toIdx--;
+      }
+      targetParentRef.splice(toIdx, 0, sourceValue);
+    } else {
+      targetParentRef[sourceKey] = sourceValue;
+      if (position !== "into") {
+        Path.reorderObject(targetParentRef, sourceKey, targetRefKey, position);
+      }
+    }
+  }
 
   // ---------- Path module (pure helpers over state.data) ----------
 
@@ -906,8 +959,9 @@
   // ---------- Edit mode + D&D ----------
 
   const DnD = {
-    source: null,      // { path, node }
-    lastTarget: null,  // { rowEl, position, targetPath }
+    source: null,         // { path, node }
+    lastTarget: null,     // { rowEl, position, targetPath }
+    schemaCache: new Map(), // per-drag cache for Schema.canPlace results
 
     start(handle, e) {
       if (!state.editMode) { e.preventDefault(); return; }
@@ -916,6 +970,7 @@
       const path = JSON.parse(node.dataset.path);
       if (path.length === 0) { e.preventDefault(); return; } // root undraggable
       DnD.source = { path, node };
+      DnD.schemaCache.clear();
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("application/x-json-diver-path", JSON.stringify(path));
       e.dataTransfer.setData("text/plain", ""); // some browsers need a text/plain entry
@@ -984,6 +1039,24 @@
         reason = `キー "${sourceKey}" が移動先に既に存在します`;
       }
 
+      // Schema gate (MVP-4): would this placement increase violations?
+      if (valid && state.schema) {
+        const cacheKey = `${JSON.stringify(targetPath)}|${position}`;
+        let allowed;
+        if (DnD.schemaCache.has(cacheKey)) {
+          allowed = DnD.schemaCache.get(cacheKey);
+        } else {
+          allowed = Schema.canPlace(
+            state.data, DnD.source.path, targetPath, position, state.violations.length
+          );
+          DnD.schemaCache.set(cacheKey, allowed);
+        }
+        if (!allowed) {
+          valid = false;
+          reason = "スキーマ違反になります";
+        }
+      }
+
       DnD.clearIndicators();
       if (valid) {
         const cls =
@@ -1018,45 +1091,7 @@
       e.preventDefault();
       const { position, targetPath } = DnD.lastTarget;
 
-      const sourceParentRef = Path.parent(state.data, DnD.source.path);
-      const sourceKey = Path.last(DnD.source.path);
-      const sourceValue = sourceParentRef[sourceKey];
-
-      const targetParentPath =
-        position === "into" ? targetPath : targetPath.slice(0, -1);
-      const targetParentRef = Path.get(state.data, targetParentPath);
-      const targetRefKey = position === "into" ? null : Path.last(targetPath);
-
-      const isSameObjectParent =
-        sourceParentRef === targetParentRef && !Array.isArray(sourceParentRef);
-
-      if (isSameObjectParent) {
-        // Same-object reorder via key list rebuild
-        Path.reorderObject(sourceParentRef, sourceKey, targetRefKey, position);
-      } else {
-        // Remove from source first
-        if (Array.isArray(sourceParentRef)) sourceParentRef.splice(sourceKey, 1);
-        else delete sourceParentRef[sourceKey];
-
-        // Insert into target
-        if (Array.isArray(targetParentRef)) {
-          let toIdx;
-          if (position === "into") {
-            toIdx = targetParentRef.length;
-          } else {
-            toIdx = position === "before" ? targetRefKey : targetRefKey + 1;
-            // Same array: adjust if we removed an item before target ref
-            if (sourceParentRef === targetParentRef && sourceKey < toIdx) toIdx--;
-          }
-          targetParentRef.splice(toIdx, 0, sourceValue);
-        } else {
-          // Object target (different parent): set key, then optionally reorder
-          targetParentRef[sourceKey] = sourceValue;
-          if (position !== "into") {
-            Path.reorderObject(targetParentRef, sourceKey, targetRefKey, position);
-          }
-        }
-      }
+      applyMove(state.data, DnD.source.path, targetPath, position);
 
       const text = JSON.stringify(state.data, null, 2);
       $input.value = text;
@@ -1073,6 +1108,7 @@
       document.body.classList.remove("dnd-active");
       DnD.source = null;
       DnD.lastTarget = null;
+      DnD.schemaCache.clear();
     },
   };
 
