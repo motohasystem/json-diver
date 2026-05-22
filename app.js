@@ -23,6 +23,8 @@
   const $btnClear = document.getElementById("btn-clear");
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
+  const $btnCopy = document.getElementById("btn-copy");
+  const $btnPaste = document.getElementById("btn-paste");
   const $modeSwitch = document.getElementById("mode-switch");
   const $btnUndo = document.getElementById("btn-undo");
   const $btnRedo = document.getElementById("btn-redo");
@@ -36,9 +38,10 @@
   const $minimapViewport = document.getElementById("minimap-viewport");
   const $toast = document.getElementById("toast");
 
-  function showToast(msg, ms = 4000) {
+  function showToast(msg, ms = 4000, type = "error") {
     $toast.hidden = false;
     $toast.textContent = msg;
+    $toast.className = "toast toast-" + type;
     clearTimeout(showToast._timer);
     showToast._timer = setTimeout(() => { $toast.hidden = true; }, ms);
   }
@@ -1012,14 +1015,16 @@
     } catch (_) { /* storage unavailable */ }
   }
 
-  function parseAndRender(text) {
+  function parseAndRender(text, opts = {}) {
     const trimmed = text.trim();
     if (!trimmed) {
       state.data = null;
       $tree.innerHTML = ""; setError(""); saveToStorage("");
       $btnDownload.disabled = true;
+      $btnCopy.disabled = true;
       revalidate();
       renderDepthBar();
+      if (!opts.preserveHistory) History.reset();
       return;
     }
     try {
@@ -1029,11 +1034,13 @@
       renderTree(value, $tree);
       saveToStorage(text);
       $btnDownload.disabled = false;
+      $btnCopy.disabled = false;
       revalidate();
-      History.reset();
+      if (!opts.preserveHistory) History.reset();
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
+      $btnCopy.disabled = true;
     }
   }
 
@@ -1118,17 +1125,56 @@
     }
   });
 
+  $btnCopy.addEventListener("click", async () => {
+    const text = $input.value;
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("クリップボードにコピーしました", 1500, "ok");
+    } catch (err) {
+      showToast(`コピー失敗: ${err.message}`);
+    }
+  });
+
+  $btnPaste.addEventListener("click", async () => {
+    let text;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch (err) {
+      showToast(`貼り付け失敗: ${err.message}`);
+      return;
+    }
+    if (!text || !text.trim()) {
+      showToast("クリップボードが空です");
+      return;
+    }
+    // Pre-validate so a failure doesn't leak an empty undo step
+    try { JSON.parse(text); }
+    catch (err) { showToast(`不正なJSON: ${err.message}`); return; }
+
+    if (state.data !== null && state.data !== undefined) {
+      if (!confirm("現在のデータが置き換わります。続行しますか？")) return;
+      History.pushBefore();
+    }
+    $input.value = text;
+    parseAndRender(text, { preserveHistory: true });
+  });
+
   $btnClear.addEventListener("click", () => {
+    if (state.data !== null && state.data !== undefined) {
+      if (!confirm("現在のデータをクリアします。続行しますか？")) return;
+      History.pushBefore();
+    }
     state.data = null;
     $input.value = "";
     $tree.innerHTML = "";
     setError("");
     saveToStorage("");
     $btnDownload.disabled = true;
+    $btnCopy.disabled = true;
     scheduleMinimapRedraw();
     revalidate();
     renderDepthBar();
-    History.reset();
   });
 
   // ---------- Edit mode + D&D ----------
@@ -1288,7 +1334,7 @@
       }
 
       // Commit (with undo history)
-      History.pushBefore(state.data);
+      History.pushBefore();
       state.data = draft;
       const text = JSON.stringify(state.data, null, 2);
       $input.value = text;
@@ -1332,8 +1378,12 @@
     future: [],
     MAX: 50,
 
-    pushBefore(currentData) {
-      History.past.push(cloneData(currentData));
+    _snapshot() {
+      return { data: cloneData(state.data), text: $input.value };
+    },
+
+    pushBefore() {
+      History.past.push(History._snapshot());
       if (History.past.length > History.MAX) History.past.shift();
       History.future = [];
       History.updateUI();
@@ -1341,7 +1391,7 @@
 
     undo() {
       if (History.past.length === 0) return undefined;
-      History.future.push(cloneData(state.data));
+      History.future.push(History._snapshot());
       const prev = History.past.pop();
       History.updateUI();
       return prev;
@@ -1349,7 +1399,7 @@
 
     redo() {
       if (History.future.length === 0) return undefined;
-      History.past.push(cloneData(state.data));
+      History.past.push(History._snapshot());
       const next = History.future.pop();
       History.updateUI();
       return next;
@@ -1367,12 +1417,23 @@
     },
   };
 
-  function commitState(newData) {
-    state.data = newData;
-    const text = JSON.stringify(state.data, null, 2);
-    $input.value = text;
-    saveToStorage(text);
-    renderTree(state.data, $tree);
+  // Apply a stored snapshot to state + UI
+  function commitState(snapshot) {
+    state.data = snapshot.data;
+    $input.value = snapshot.text;
+    setError("");
+    saveToStorage(snapshot.text);
+    if (snapshot.data === null && !snapshot.text.trim()) {
+      $tree.innerHTML = "";
+      $btnDownload.disabled = true;
+      $btnCopy.disabled = true;
+      renderDepthBar();
+      scheduleMinimapRedraw();
+    } else {
+      renderTree(snapshot.data, $tree);
+      $btnDownload.disabled = false;
+      $btnCopy.disabled = false;
+    }
     revalidate();
   }
 
