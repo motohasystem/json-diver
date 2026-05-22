@@ -1154,8 +1154,8 @@
 
     if (state.data !== null && state.data !== undefined) {
       if (!confirm("現在のデータが置き換わります。続行しますか？")) return;
-      History.pushBefore();
     }
+    History.pushBefore(); // always undoable, even when pasting into empty
     $input.value = text;
     parseAndRender(text, { preserveHistory: true });
   });
