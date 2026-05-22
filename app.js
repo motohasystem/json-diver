@@ -1779,4 +1779,10 @@
       parseAndRender(saved);
     }
   } catch (_) { /* storage unavailable */ }
+
+  window.JsonDiver = {
+    loadText(text) { $input.value = text; parseAndRender(text); },
+    getText() { return $input.value; },
+    setTitleSuffix(s) { document.title = s ? `${s} — JSON Diver` : "JSON Diver"; },
+  };
 })();
