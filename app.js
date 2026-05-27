@@ -609,6 +609,9 @@
         valSpan.classList.add("truncated");
         attachPeekHandlers(valSpan, value);
       }
+      if (t === "string" || t === "number" || t === "boolean") {
+        attachInlineEdit(valSpan, node, t);
+      }
       row.appendChild(valSpan);
     }
 
@@ -915,12 +918,233 @@
     elNode.addEventListener("mouseleave", hideTooltip);
   }
 
+  // ---------- Inline primitive editing (edit mode, main tree only) ----------
+
+  function parsePath(node) {
+    try { return JSON.parse(node.dataset.path || "[]"); }
+    catch (_) { return []; }
+  }
+
+  function attachInlineEdit(valSpan, node, type) {
+    valSpan.addEventListener("click", (e) => {
+      if (!state.editMode) return;
+      if (valSpan.classList.contains("editing")) return;
+      e.stopPropagation();
+      hideTooltip();
+      if (type === "boolean") startBooleanEdit(node, valSpan);
+      else startInlineEdit(node, valSpan, type);
+    });
+  }
+
+  function startInlineEdit(node, valSpan, type) {
+    const path = parsePath(node);
+    const rootValue = treeRootValueFor(node);
+    const current = path.length === 0 ? rootValue : Path.get(rootValue, path);
+    if (type === "string" && typeof current !== "string") return;
+    if (type === "number" && typeof current !== "number") return;
+
+    const isMulti = type === "string" && /\n/.test(current);
+    const editor = isMulti
+      ? el("textarea", "val-editor val-editor-string val-editor-multi")
+      : el("input", "val-editor val-editor-" + type);
+    if (!isMulti) editor.type = "text";
+    editor.spellcheck = false;
+    editor.value = type === "string" ? current : String(current);
+
+    valSpan.classList.add("editing");
+    valSpan.style.display = "none";
+    valSpan.parentNode.insertBefore(editor, valSpan.nextSibling);
+
+    const sizeInput = () => {
+      // Pad a bit so chars don't get clipped; cap min/max
+      const len = editor.value.length;
+      const px = Math.max(60, Math.min(600, len * 8 + 28));
+      editor.style.width = px + "px";
+    };
+    const sizeTextarea = () => {
+      editor.style.height = "auto";
+      editor.style.height = Math.min(400, editor.scrollHeight + 2) + "px";
+    };
+    const autoSize = isMulti ? sizeTextarea : sizeInput;
+    autoSize();
+    editor.addEventListener("input", autoSize);
+
+    editor.focus();
+    editor.select();
+
+    let done = false;
+    const cleanup = () => {
+      editor.remove();
+      valSpan.classList.remove("editing");
+      valSpan.style.display = "";
+    };
+    const finish = (commit, source) => {
+      if (done) return;
+      if (!commit) { done = true; cleanup(); return; }
+      const parsed = parseEditorInput(editor.value, type);
+      if (!parsed.ok) {
+        if (source === "enter") {
+          showToast(parsed.error);
+          // keep editor open; user can fix and re-Enter
+        } else {
+          // blur with invalid input → silent cancel
+          done = true; cleanup();
+        }
+        return;
+      }
+      if (parsed.value === current) { done = true; cleanup(); return; }
+      done = true;
+      commitPrimitiveEdit(node, parsed.value, type);
+      // commitPrimitiveEdit replaces the hidden valSpan; the editor is its
+      // next sibling and lives on. Remove it now.
+      editor.remove();
+    };
+    editor.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      else if (e.key === "Enter" && (!isMulti || e.ctrlKey || e.metaKey)) {
+        e.preventDefault(); finish(true, "enter");
+      }
+    });
+    editor.addEventListener("blur", () => finish(true, "blur"));
+  }
+
+  function parseEditorInput(text, type) {
+    if (type === "string") return { ok: true, value: text };
+    if (type === "number") {
+      const s = text.trim();
+      if (s === "") return { ok: false, error: "数値を入力してください" };
+      const n = Number(s);
+      if (!Number.isFinite(n)) return { ok: false, error: `数値として無効: "${s}"` };
+      return { ok: true, value: n };
+    }
+    return { ok: false, error: "サポート外の型" };
+  }
+
+  function startBooleanEdit(node, valSpan) {
+    const path = parsePath(node);
+    const rootValue = treeRootValueFor(node);
+    const current = path.length === 0 ? rootValue : Path.get(rootValue, path);
+    if (typeof current !== "boolean") return;
+
+    const editor = el("select", "val-editor val-editor-boolean");
+    const optTrue = el("option", "", "true"); optTrue.value = "true";
+    const optFalse = el("option", "", "false"); optFalse.value = "false";
+    editor.appendChild(optTrue);
+    editor.appendChild(optFalse);
+    editor.value = String(current);
+
+    valSpan.classList.add("editing");
+    valSpan.style.display = "none";
+    valSpan.parentNode.insertBefore(editor, valSpan.nextSibling);
+
+    let done = false;
+    const cleanup = () => {
+      editor.remove();
+      valSpan.classList.remove("editing");
+      valSpan.style.display = "";
+    };
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      if (!commit) { cleanup(); return; }
+      const newValue = editor.value === "true";
+      if (newValue === current) { cleanup(); return; }
+      commitPrimitiveEdit(node, newValue, "boolean");
+      editor.remove();
+    };
+    editor.addEventListener("change", () => finish(true));
+    editor.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      else if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    });
+    editor.addEventListener("blur", () => finish(true));
+    editor.focus();
+  }
+
+  function treeRootValueFor(node) {
+    const tree = node.closest(".tree");
+    if (!tree) return state.data;
+    return tree === $tree ? state.data : tree._jdRoot;
+  }
+
+  function commitPrimitiveEdit(node, newValue, type) {
+    const path = parsePath(node);
+    const treeEl = node.closest(".tree");
+    const isModal = treeEl && treeEl.classList.contains("modal-tree");
+    // Replacing a modal's root primitive would orphan closure refs in the
+    // outer escaped-link; modals are always opened on object/array roots
+    // so this shouldn't happen normally.
+    if (isModal && path.length === 0) return;
+
+    History.pushBefore();
+
+    if (path.length === 0) {
+      state.data = newValue;
+    } else {
+      const rootValue = isModal ? treeEl._jdRoot : state.data;
+      const parent = Path.parent(rootValue, path);
+      if (parent == null) return;
+      parent[Path.last(path)] = newValue;
+    }
+
+    if (isModal) propagateModalChange(treeEl);
+
+    const text = JSON.stringify(state.data, null, 2);
+    $input.value = text;
+    saveToStorage(text);
+
+    // In-place replace the val span (keeps scroll, collapse state, focus)
+    const row = node.querySelector(":scope > .row");
+    const oldVal = row && row.querySelector(":scope > .val");
+    if (oldVal) {
+      const newSpan = el("span", `val val-${type}`);
+      const { text: txt, truncated } = formatInlineValue(newValue, type);
+      newSpan.textContent = txt;
+      if (truncated) {
+        newSpan.classList.add("truncated");
+        attachPeekHandlers(newSpan, newValue);
+      }
+      attachInlineEdit(newSpan, node, type);
+      oldVal.replaceWith(newSpan);
+    }
+    revalidate();
+    scheduleMinimapRedraw();
+  }
+
+  // After mutating a value inside a modal tree, re-stringify each modal's
+  // value and write it back into its parent slot, all the way up to state.data.
+  function propagateModalChange(modalTreeEl) {
+    let idx = -1;
+    for (let i = 0; i < modalStack.length; i++) {
+      if (modalStack[i].innerTree === modalTreeEl) { idx = i; break; }
+    }
+    if (idx === -1) return;
+    for (let i = idx; i >= 0; i--) {
+      const entry = modalStack[i];
+      if (!entry.parentNode) continue;
+      const parentPath = parsePath(entry.parentNode);
+      const parentTree = entry.parentNode.closest(".tree");
+      if (!parentTree) continue;
+      const isParentModal = parentTree.classList.contains("modal-tree");
+      const parentRoot = isParentModal ? parentTree._jdRoot : state.data;
+      const value = entry.innerTree._jdRoot;
+      const stringified = JSON.stringify(value, null, 2);
+      if (parentPath.length === 0) {
+        if (isParentModal) parentTree._jdRoot = stringified;
+        else state.data = stringified;
+      } else {
+        const p = Path.parent(parentRoot, parentPath);
+        if (p != null) p[Path.last(parentPath)] = stringified;
+      }
+    }
+  }
+
   function attachEscapedHandlers(elNode, rawString, parsedValue, key) {
-    let hoverTreeHtml = null;
     elNode.addEventListener("mouseenter", (e) => {
-      if (hoverTreeHtml === null) hoverTreeHtml = buildPreviewHtml(parsedValue);
+      // Rebuild every hover so edits inside the modal are reflected.
+      const html = buildPreviewHtml(parsedValue);
       showTooltip(
-        `<div class="tooltip-label">escaped JSON (click to zoom)</div>${hoverTreeHtml}`,
+        `<div class="tooltip-label">escaped JSON (click to zoom)</div>${html}`,
         e.clientX, e.clientY, "escaped"
       );
     });
@@ -929,7 +1153,8 @@
     elNode.addEventListener("click", (e) => {
       e.stopPropagation();
       hideTooltip();
-      openModal(parsedValue, key);
+      const parentNode = elNode.closest(".node");
+      openModal(parsedValue, key, parentNode);
     });
   }
 
@@ -975,7 +1200,7 @@
 
   const modalStack = [];
 
-  function openModal(value, key) {
+  function openModal(value, key, parentNode) {
     const overlay = el("div", "modal");
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeTopModal();
@@ -990,9 +1215,12 @@
     const depthBadge = modalStack.length > 0 ? ` <span class="modal-depth">深さ ${modalStack.length + 1}</span>` : "";
     title.innerHTML = `Zoom: <b>${escapeHtml(String(keyLabel))}</b> &middot; escaped JSON${depthBadge}`;
     head.appendChild(title);
+    const headActions = el("div", "modal-head-actions");
+    headActions.appendChild(buildModeSwitch());
     const closeBtn = el("button", "modal-close", "Close (Esc)");
     closeBtn.addEventListener("click", closeTopModal);
-    head.appendChild(closeBtn);
+    headActions.appendChild(closeBtn);
+    head.appendChild(headActions);
     card.appendChild(head);
 
     const main = el("div", "modal-main");
@@ -1044,7 +1272,7 @@
     });
     body.addEventListener("scroll", minimap.updateViewport, { passive: true });
 
-    modalStack.push({ overlay, minimap, depthDisposer });
+    modalStack.push({ overlay, minimap, depthDisposer, innerTree, parentNode });
     requestAnimationFrame(() => minimap.redraw());
   }
 
@@ -1423,13 +1651,34 @@
   function setEditMode(on) {
     state.editMode = on;
     document.body.classList.toggle("edit-mode", on);
-    $modeSwitch.dataset.mode = on ? "edit" : "view";
+    document.querySelectorAll(".mode-switch").forEach((sw) => {
+      sw.dataset.mode = on ? "edit" : "view";
+    });
   }
-  $modeSwitch.addEventListener("click", (e) => {
-    const opt = e.target.closest && e.target.closest(".mode-opt");
+  // Delegate clicks so dynamically created mode-switches (e.g. inside modals)
+  // also toggle without per-instance listeners.
+  document.addEventListener("click", (e) => {
+    const opt = e.target.closest && e.target.closest(".mode-switch .mode-opt");
     if (!opt) return;
     setEditMode(opt.dataset.mode === "edit");
   });
+
+  function buildModeSwitch() {
+    const sw = el("div", "mode-switch");
+    sw.dataset.mode = state.editMode ? "edit" : "view";
+    sw.setAttribute("role", "group");
+    sw.setAttribute("aria-label", "モード切替");
+    const thumb = el("div", "mode-thumb");
+    thumb.setAttribute("aria-hidden", "true");
+    const optView = el("button", "mode-opt", "View");
+    optView.type = "button"; optView.dataset.mode = "view";
+    const optEdit = el("button", "mode-opt", "Edit");
+    optEdit.type = "button"; optEdit.dataset.mode = "edit";
+    sw.appendChild(thumb);
+    sw.appendChild(optView);
+    sw.appendChild(optEdit);
+    return sw;
+  }
 
   // ---------- Undo / Redo history ----------
 
