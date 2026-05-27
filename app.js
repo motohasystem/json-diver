@@ -363,6 +363,7 @@
 
   function renderTree(value, container, basePath = []) {
     container.innerHTML = "";
+    container._jdRoot = value;
     const root = renderNode(null, value, true, basePath);
     root.classList.add("root");
     container.appendChild(root);
@@ -581,10 +582,8 @@
     // value side
     if (t === "object") {
       row.appendChild(el("span", "count", `{${Object.keys(value).length}}`));
-      row.appendChild(buildSiblingActions(node));
     } else if (t === "array") {
       row.appendChild(el("span", "count", `[${value.length}]`));
-      row.appendChild(buildSiblingActions(node));
     } else if (escapedParsed) {
       const link = el("span", "val escaped-link", "(escaped JSON · click to zoom)");
       attachEscapedHandlers(link, value, escapedParsed, key);
@@ -600,6 +599,8 @@
       }
       row.appendChild(valSpan);
     }
+
+    row.appendChild(buildRowActions(node, isContainer));
 
     node.appendChild(row);
 
@@ -695,8 +696,55 @@
     smoothScrollRaf = requestAnimationFrame(step);
   }
 
-  function buildSiblingActions(node) {
+  function buildRowActions(node, isContainer) {
     const actions = el("span", "row-actions");
+    actions.appendChild(buildCopyButton(node));
+    if (isContainer) actions.appendChild(buildSiblingToggleButton(node));
+    return actions;
+  }
+
+  function findTreeRootValue(el) {
+    let p = el;
+    while (p) {
+      if (p.classList && p.classList.contains("tree") && "_jdRoot" in p) {
+        return p._jdRoot;
+      }
+      p = p.parentElement;
+    }
+    return undefined;
+  }
+
+  function buildCopyButton(node) {
+    const btn = el("button", "row-act row-act-copy", "📋");
+    btn.type = "button";
+    btn.title = "このノードのJSONをコピー";
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      hideTooltip();
+      let path;
+      try { path = JSON.parse(node.dataset.path || "[]"); }
+      catch (_) { path = []; }
+      const rootVal = findTreeRootValue(node);
+      const value = path.length === 0 ? rootVal : Path.get(rootVal, path);
+      if (value === undefined) {
+        showToast("コピー対象が見つかりません");
+        return;
+      }
+      const text = JSON.stringify(value, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("クリップボードにコピーしました", 1500, "ok");
+        btn.classList.remove("copied");
+        void btn.offsetWidth;
+        btn.classList.add("copied");
+      } catch (err) {
+        showToast(`コピー失敗: ${err.message}`);
+      }
+    });
+    return btn;
+  }
+
+  function buildSiblingToggleButton(node) {
     const btn = el("button", "row-act", "▾▸");
     btn.type = "button";
 
@@ -730,8 +778,7 @@
       refresh();
     });
 
-    actions.appendChild(btn);
-    return actions;
+    return btn;
   }
 
   function formatInlineValue(value, t) {
@@ -940,6 +987,7 @@
 
     const body = el("div", "modal-body");
     const innerTree = el("div", "tree modal-tree");
+    innerTree._jdRoot = value;
     const root = renderNode(null, value, true);
     root.classList.add("root");
     innerTree.appendChild(root);

@@ -527,6 +527,17 @@ body.dnd-active { user-select: none; }
   border-color: var(--accent);
   background: rgba(122, 162, 255, 0.08);
 }
+.row-act-copy {
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.row-act-copy.copied {
+  animation: row-act-copied 600ms ease-out;
+}
+@keyframes row-act-copied {
+  0% { background: rgba(122, 162, 255, 0.45); }
+  100% { background: transparent; }
+}
 
 .val {
   font-family: var(--mono);
