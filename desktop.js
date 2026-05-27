@@ -3,6 +3,8 @@
   const T = window.__TAURI__;
   if (!T) return;
 
+  document.documentElement.classList.add("tauri");
+
   const { invoke } = T.core;
   const { listen } = T.event;
 
