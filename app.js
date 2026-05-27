@@ -368,7 +368,7 @@
     root.classList.add("root");
     container.appendChild(root);
     scheduleMinimapRedraw();
-    if (container === $tree) renderDepthBar();
+    if (container === $tree) renderDepthBar($depthBar, $tree, state.data);
   }
 
   // ---------- depth toolbar ----------
@@ -388,14 +388,15 @@
     return Array.from(set).sort((a, b) => a - b);
   }
 
-  function renderDepthBar() {
-    if (!$depthBar) return;
-    $depthBar.innerHTML = "";
-    if (state.data === null || state.data === undefined) return;
-    if (typeof state.data !== "object") return;
-    const depths = depthsWithContainers(state.data);
+  function renderDepthBar(barEl, treeEl, rootValue) {
+    if (!barEl) return;
+    barEl.innerHTML = "";
+    if (rootValue === null || rootValue === undefined) return;
+    if (typeof rootValue !== "object") return;
+    const depths = depthsWithContainers(rootValue);
     // Must match CSS --depth-step (= .node padding-left, currently 40px)
     const INDENT_PX = 40;
+    const scopeEl = barEl.parentElement;
     for (const d of depths) {
       const col = el("div", "depth-col");
       col.style.left = d * INDENT_PX + "px";
@@ -406,29 +407,31 @@
       const btn = el("button", "depth-btn", "0");
       btn.type = "button";
       btn.title = `深さ ${d} のコンテナをまとめて開閉`;
-      btn.addEventListener("click", () => toggleDepth(d));
+      btn.addEventListener("click", () => toggleDepth(treeEl, d));
       btn.addEventListener("mouseenter", () => {
-        document.documentElement.style.setProperty("--highlight-x", d * INDENT_PX + "px");
-        document.documentElement.style.setProperty("--highlight-opacity", "0.55");
-        setDepthHover(d, true);
+        if (scopeEl) {
+          scopeEl.style.setProperty("--highlight-x", d * INDENT_PX + "px");
+          scopeEl.style.setProperty("--highlight-opacity", "0.55");
+        }
+        setDepthHover(treeEl, d, true);
       });
       btn.addEventListener("mouseleave", () => {
-        document.documentElement.style.setProperty("--highlight-opacity", "0");
-        setDepthHover(d, false);
+        if (scopeEl) scopeEl.style.setProperty("--highlight-opacity", "0");
+        setDepthHover(treeEl, d, false);
       });
 
       col.appendChild(label);
       col.appendChild(btn);
-      $depthBar.appendChild(col);
+      barEl.appendChild(col);
     }
-    refreshDepthStates();
+    refreshDepthStates(barEl, treeEl);
   }
 
   // Recompute container count + open/mixed/closed state for each depth button
-  function refreshDepthStates() {
-    if (!$depthBar) return;
+  function refreshDepthStates(barEl, treeEl) {
+    if (!barEl || !treeEl) return;
     const stats = new Map(); // depth → { count, openCount }
-    for (const n of $tree.querySelectorAll(".node")) {
+    for (const n of treeEl.querySelectorAll(".node")) {
       let d;
       try { d = JSON.parse(n.dataset.path).length; } catch (_) { continue; }
       const t = n.querySelector(":scope > .row > .toggle");
@@ -438,7 +441,7 @@
       s.count++;
       if (!n.classList.contains("collapsed")) s.openCount++;
     }
-    for (const col of $depthBar.querySelectorAll(".depth-col")) {
+    for (const col of barEl.querySelectorAll(".depth-col")) {
       const d = parseInt(col.dataset.depth, 10);
       const btn = col.querySelector(".depth-btn");
       if (!btn) continue;
@@ -461,27 +464,36 @@
     }
   }
 
-  // Observe class changes on .node to keep depth button states in sync
-  let depthStateRaf = 0;
-  const depthStateObserver = new MutationObserver((mutations) => {
-    const relevant = mutations.some(
-      (m) => m.target && m.target.classList && m.target.classList.contains("node")
-    );
-    if (!relevant) return;
-    if (depthStateRaf) return;
-    depthStateRaf = requestAnimationFrame(() => {
-      depthStateRaf = 0;
-      refreshDepthStates();
+  // Observe class changes on .node to keep depth button states in sync.
+  // Returns a function that disconnects the observer (caller is responsible
+  // for invoking it when the scope is destroyed).
+  function watchDepthStates(barEl, treeEl) {
+    let raf = 0;
+    const obs = new MutationObserver((mutations) => {
+      const relevant = mutations.some(
+        (m) => m.target && m.target.classList && m.target.classList.contains("node")
+      );
+      if (!relevant) return;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        refreshDepthStates(barEl, treeEl);
+      });
     });
-  });
-  depthStateObserver.observe($tree, {
-    attributes: true,
-    attributeFilter: ["class"],
-    subtree: true,
-  });
+    obs.observe(treeEl, {
+      attributes: true,
+      attributeFilter: ["class"],
+      subtree: true,
+    });
+    return () => obs.disconnect();
+  }
 
-  function setDepthHover(depth, on) {
-    for (const n of $tree.querySelectorAll(".node")) {
+  // Main-tree observer is permanent; modal observers are created/disposed
+  // per modal instance.
+  watchDepthStates($depthBar, $tree);
+
+  function setDepthHover(treeEl, depth, on) {
+    for (const n of treeEl.querySelectorAll(".node")) {
       let nodeDepth;
       try { nodeDepth = JSON.parse(n.dataset.path).length; }
       catch (_) { continue; }
@@ -493,11 +505,11 @@
     }
   }
 
-  function toggleDepth(depth) {
+  function toggleDepth(treeEl, depth) {
     hideTooltip();
     // Gather containers by depth in one pass
     const byDepth = new Map(); // depth → [.node, ...] for containers only
-    for (const n of $tree.querySelectorAll(".node")) {
+    for (const n of treeEl.querySelectorAll(".node")) {
       let d;
       try { d = JSON.parse(n.dataset.path).length; }
       catch (_) { continue; }
@@ -986,12 +998,16 @@
     const main = el("div", "modal-main");
 
     const body = el("div", "modal-body");
+    const innerDepthBar = el("div", "depth-bar modal-depth-bar");
+    body.appendChild(innerDepthBar);
     const innerTree = el("div", "tree modal-tree");
     innerTree._jdRoot = value;
     const root = renderNode(null, value, true);
     root.classList.add("root");
     innerTree.appendChild(root);
     body.appendChild(innerTree);
+    renderDepthBar(innerDepthBar, innerTree, value);
+    const depthDisposer = watchDepthStates(innerDepthBar, innerTree);
 
     const sidebar = el("div", "modal-sidebar");
     sidebar.appendChild(el("div", "minimap-title", "ミニマップ"));
@@ -1028,7 +1044,7 @@
     });
     body.addEventListener("scroll", minimap.updateViewport, { passive: true });
 
-    modalStack.push({ overlay, minimap });
+    modalStack.push({ overlay, minimap, depthDisposer });
     requestAnimationFrame(() => minimap.redraw());
   }
 
@@ -1036,6 +1052,7 @@
     const top = modalStack.pop();
     if (top) {
       top.minimap.destroy();
+      if (top.depthDisposer) top.depthDisposer();
       top.overlay.remove();
     }
     if (modalStack.length === 0) $modalStack.setAttribute("aria-hidden", "true");
@@ -1071,7 +1088,7 @@
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
       revalidate();
-      renderDepthBar();
+      renderDepthBar($depthBar, $tree, state.data);
       if (!opts.preserveHistory) History.reset();
       return;
     }
@@ -1222,7 +1239,7 @@
     $btnCopy.disabled = true;
     scheduleMinimapRedraw();
     revalidate();
-    renderDepthBar();
+    renderDepthBar($depthBar, $tree, state.data);
   });
 
   // ---------- Edit mode + D&D ----------
@@ -1475,7 +1492,7 @@
       $tree.innerHTML = "";
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
-      renderDepthBar();
+      renderDepthBar($depthBar, $tree, state.data);
       scheduleMinimapRedraw();
     } else {
       renderTree(snapshot.data, $tree);
