@@ -24,6 +24,7 @@
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
   const $btnCopy = document.getElementById("btn-copy");
+  const $btnFormat = document.getElementById("btn-format");
   const $btnPaste = document.getElementById("btn-paste");
   const $modeSwitch = document.getElementById("mode-switch");
   const $btnUndo = document.getElementById("btn-undo");
@@ -745,7 +746,7 @@
         showToast("コピー対象が見つかりません");
         return;
       }
-      const text = JSON.stringify(value, null, 2);
+      const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
       try {
         await navigator.clipboard.writeText(text);
         showToast("クリップボードにコピーしました", 1500, "ok");
@@ -1315,6 +1316,7 @@
       $tree.innerHTML = ""; setError(""); saveToStorage("");
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
+      $btnFormat.disabled = true;
       revalidate();
       renderDepthBar($depthBar, $tree, state.data);
       if (!opts.preserveHistory) History.reset();
@@ -1328,14 +1330,40 @@
       saveToStorage(text);
       $btnDownload.disabled = false;
       $btnCopy.disabled = false;
+      $btnFormat.disabled = false;
+      refreshFormatButton();
       revalidate();
       if (!opts.preserveHistory) History.reset();
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
+      $btnFormat.disabled = true;
     }
   }
+
+  // Format / Minify toggle. The label reflects the next action, derived from
+  // whether the current input is already pretty-printed (contains newlines).
+  function refreshFormatButton() {
+    const minified = !/\n/.test($input.value.trim());
+    $btnFormat.textContent = minified ? "Format" : "Minify";
+    $btnFormat.title = minified ? "整形（インデント付き）" : "圧縮（1行に）";
+  }
+
+  $btnFormat.addEventListener("click", () => {
+    const text = $input.value.trim();
+    if (!text) return;
+    let value;
+    try { value = JSON.parse(text); }
+    catch (err) { showToast(`不正なJSON: ${err.message}`); return; }
+    const minified = !/\n/.test(text);
+    const next = minified
+      ? JSON.stringify(value, null, 2)
+      : JSON.stringify(value);
+    $input.value = next;
+    saveToStorage(next);
+    refreshFormatButton();
+  });
 
   function pad2(n) { return String(n).padStart(2, "0"); }
   function downloadFilename() {
@@ -1465,6 +1493,7 @@
     saveToStorage("");
     $btnDownload.disabled = true;
     $btnCopy.disabled = true;
+    $btnFormat.disabled = true;
     scheduleMinimapRedraw();
     revalidate();
     renderDepthBar($depthBar, $tree, state.data);
@@ -1741,12 +1770,15 @@
       $tree.innerHTML = "";
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
+      $btnFormat.disabled = true;
       renderDepthBar($depthBar, $tree, state.data);
       scheduleMinimapRedraw();
     } else {
       renderTree(snapshot.data, $tree);
       $btnDownload.disabled = false;
       $btnCopy.disabled = false;
+      $btnFormat.disabled = false;
+      refreshFormatButton();
     }
     revalidate();
   }
