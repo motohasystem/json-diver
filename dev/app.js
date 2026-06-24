@@ -16,8 +16,9 @@
 
   const $input = document.getElementById("input");
   const $tree = document.getElementById("tree");
+  const $treeScroll = document.querySelector(".tree-scroll");
+  const $content = document.querySelector(".content");
   const $error = document.getElementById("error");
-  const $dropzone = document.getElementById("dropzone");
   const $tooltip = document.getElementById("tooltip");
   const $modalStack = document.getElementById("modal-stack");
   const $btnClear = document.getElementById("btn-clear");
@@ -52,7 +53,7 @@
   const state = {
     data: null,       // current parsed JSON (single source of truth)
     schema: null,     // current parsed schema (added in MVP-3)
-    editMode: false,  // edit toggle (added in MVP-1)
+    mode: "view",     // "view" | "edit" | "raw" (was editMode boolean)
     violations: [],   // current schema violations (added in MVP-3)
   };
 
@@ -928,7 +929,7 @@
 
   function attachInlineEdit(valSpan, node, type) {
     valSpan.addEventListener("click", (e) => {
-      if (!state.editMode) return;
+      if (state.mode !== "edit") return;
       if (valSpan.classList.contains("editing")) return;
       e.stopPropagation();
       hideTooltip();
@@ -1274,11 +1275,14 @@
     body.addEventListener("scroll", minimap.updateViewport, { passive: true });
 
     modalStack.push({ overlay, minimap, depthDisposer, innerTree, parentNode });
+    applyModeToPane(innerTree); // show raw editor immediately if already in raw mode
     requestAnimationFrame(() => minimap.redraw());
   }
 
   function closeTopModal() {
-    const top = modalStack.pop();
+    const top = modalStack[modalStack.length - 1];
+    if (top && state.mode === "raw") commitRawEditor(top.innerTree);
+    modalStack.pop();
     if (top) {
       top.minimap.destroy();
       if (top.depthDisposer) top.depthDisposer();
@@ -1320,6 +1324,7 @@
       revalidate();
       renderDepthBar($depthBar, $tree, state.data);
       if (!opts.preserveHistory) History.reset();
+      refreshEmptyState();
       return;
     }
     try {
@@ -1334,6 +1339,7 @@
       refreshFormatButton();
       revalidate();
       if (!opts.preserveHistory) History.reset();
+      refreshEmptyState();
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
@@ -1342,16 +1348,27 @@
     }
   }
 
+  // In Raw mode the visible text is the raw editor; elsewhere it's the canonical
+  // $input mirror (used by Copy/Download).
+  function formatTarget() {
+    if (state.mode === "raw" && $tree._jdRawEditor &&
+        $tree._jdRawEditor.style.display !== "none") {
+      return $tree._jdRawEditor;
+    }
+    return $input;
+  }
+
   // Format / Minify toggle. The label reflects the next action, derived from
-  // whether the current input is already pretty-printed (contains newlines).
+  // whether the current text is already pretty-printed (contains newlines).
   function refreshFormatButton() {
-    const minified = !/\n/.test($input.value.trim());
+    const minified = !/\n/.test(formatTarget().value.trim());
     $btnFormat.textContent = minified ? "Format" : "Minify";
     $btnFormat.title = minified ? "整形（インデント付き）" : "圧縮（1行に）";
   }
 
   $btnFormat.addEventListener("click", () => {
-    const text = $input.value.trim();
+    const target = formatTarget();
+    const text = target.value.trim();
     if (!text) return;
     let value;
     try { value = JSON.parse(text); }
@@ -1360,8 +1377,8 @@
     const next = minified
       ? JSON.stringify(value, null, 2)
       : JSON.stringify(value);
-    $input.value = next;
-    saveToStorage(next);
+    target.value = next;
+    if (target === $input) saveToStorage(next); // raw editor persists on commit
     refreshFormatButton();
   });
 
@@ -1387,15 +1404,10 @@
     URL.revokeObjectURL(url);
   });
 
-  let inputTimer = null;
-  $input.addEventListener("input", () => {
-    clearTimeout(inputTimer);
-    inputTimer = setTimeout(() => parseAndRender($input.value), 120);
-  });
-
-  // paste anywhere
+  // paste anywhere — unless a text field (raw editor, schema box, …) is focused
   document.addEventListener("paste", (e) => {
-    if (document.activeElement === $input) return; // let textarea handle natively
+    const a = document.activeElement;
+    if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return; // native
     const text = (e.clipboardData || window.clipboardData).getData("text");
     if (text) {
       $input.value = text;
@@ -1404,37 +1416,36 @@
     }
   });
 
-  // drag & drop (file / text into the dropzone — ignore in-app row D&D)
+  // drag & drop anywhere over the window (ignore in-app row D&D)
   const isRowDnd = (e) =>
     (e.dataTransfer && e.dataTransfer.types &&
       Array.from(e.dataTransfer.types).includes("application/x-json-diver-path"));
 
-  ["dragenter", "dragover"].forEach((ev) => {
-    $dropzone.addEventListener(ev, (e) => {
-      if (isRowDnd(e)) return;
-      e.preventDefault();
-      $dropzone.classList.add("dragover");
-    });
-    document.addEventListener(ev, (e) => {
-      if (isRowDnd(e)) return;
-      e.preventDefault();
-    });
-  });
-  ["dragleave", "drop"].forEach((ev) => {
-    $dropzone.addEventListener(ev, (e) => {
-      if (isRowDnd(e)) return;
-      e.preventDefault();
-      $dropzone.classList.remove("dragover");
-    });
-  });
-  $dropzone.addEventListener("drop", async (e) => {
+  let dragDepth = 0;
+  document.addEventListener("dragenter", (e) => {
     if (isRowDnd(e)) return;
     e.preventDefault();
+    dragDepth++;
+    document.body.classList.add("drag-over");
+  });
+  document.addEventListener("dragover", (e) => {
+    if (isRowDnd(e)) return;
+    e.preventDefault();
+  });
+  document.addEventListener("dragleave", (e) => {
+    if (isRowDnd(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) document.body.classList.remove("drag-over");
+  });
+  document.addEventListener("drop", async (e) => {
+    if (isRowDnd(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove("drag-over");
     const dt = e.dataTransfer;
     if (!dt) return;
     if (dt.files && dt.files.length > 0) {
-      const file = dt.files[0];
-      const text = await file.text();
+      const text = await dt.files[0].text();
       $input.value = text;
       parseAndRender(text);
       return;
@@ -1497,6 +1508,7 @@
     scheduleMinimapRedraw();
     revalidate();
     renderDepthBar($depthBar, $tree, state.data);
+    refreshEmptyState(); // empty → back to Raw input
   });
 
   // ---------- Edit mode + D&D ----------
@@ -1507,7 +1519,7 @@
     schemaCache: new Map(), // per-drag cache for Schema.canPlace results
 
     start(handle, e) {
-      if (!state.editMode) { e.preventDefault(); return; }
+      if (state.mode !== "edit") { e.preventDefault(); return; }
       const node = handle.closest(".node");
       if (!node || !node.dataset.path) { e.preventDefault(); return; }
       const path = JSON.parse(node.dataset.path);
@@ -1677,36 +1689,169 @@
     },
   };
 
-  function setEditMode(on) {
-    state.editMode = on;
-    document.body.classList.toggle("edit-mode", on);
+  function syncSwitches(mode) {
     document.querySelectorAll(".mode-switch").forEach((sw) => {
-      sw.dataset.mode = on ? "edit" : "view";
+      sw.dataset.mode = mode;
     });
   }
+
+  // No JSON loaded? The raw editor is the only input surface, so force Raw mode
+  // and disable View/Edit. Loading data re-enables them and reveals the tree.
+  function isEmptyDoc() { return !$input.value.trim(); }
+  let lastEmpty = true;
+  function refreshEmptyState() {
+    const empty = isEmptyDoc();
+    document.querySelectorAll('.mode-switch .mode-opt[data-mode="view"], .mode-switch .mode-opt[data-mode="edit"]')
+      .forEach((opt) => { opt.disabled = empty; });
+    if (empty) {
+      if (state.mode !== "raw") setMode("raw");
+    } else if (lastEmpty) {
+      setMode("view");
+    }
+    lastEmpty = empty;
+  }
+
+  function setMode(newMode) {
+    if (newMode === state.mode) return;
+    // Leaving raw mode commits every open raw editor; abort on invalid JSON.
+    if (state.mode === "raw" && newMode !== "raw") {
+      if (!commitAllRawEditors()) { syncSwitches("raw"); return; }
+    }
+    state.mode = newMode;
+    document.body.classList.toggle("edit-mode", newMode === "edit");
+    document.body.classList.toggle("raw-mode", newMode === "raw");
+    syncSwitches(newMode);
+    refreshAllPanes();
+  }
+
   // Delegate clicks so dynamically created mode-switches (e.g. inside modals)
   // also toggle without per-instance listeners.
   document.addEventListener("click", (e) => {
     const opt = e.target.closest && e.target.closest(".mode-switch .mode-opt");
-    if (!opt) return;
-    setEditMode(opt.dataset.mode === "edit");
+    if (!opt || opt.disabled) return;
+    setMode(opt.dataset.mode);
   });
 
   function buildModeSwitch() {
     const sw = el("div", "mode-switch");
-    sw.dataset.mode = state.editMode ? "edit" : "view";
+    sw.dataset.mode = state.mode;
     sw.setAttribute("role", "group");
     sw.setAttribute("aria-label", "モード切替");
     const thumb = el("div", "mode-thumb");
     thumb.setAttribute("aria-hidden", "true");
-    const optView = el("button", "mode-opt", "View");
-    optView.type = "button"; optView.dataset.mode = "view";
-    const optEdit = el("button", "mode-opt", "Edit");
-    optEdit.type = "button"; optEdit.dataset.mode = "edit";
     sw.appendChild(thumb);
-    sw.appendChild(optView);
-    sw.appendChild(optEdit);
+    for (const [mode, label] of [["view", "View"], ["edit", "Edit"], ["raw", "Raw"]]) {
+      const opt = el("button", "mode-opt", label);
+      opt.type = "button"; opt.dataset.mode = mode;
+      sw.appendChild(opt);
+    }
     return sw;
+  }
+
+  // ---------- Raw (whole-pane JSON text) editing ----------
+
+  // Every pane (main tree + each modal tree) gets a lazily-created textarea that
+  // mirrors that pane's root value. Mode is global, so all panes flip together.
+
+  function allTrees() {
+    return [$tree, ...modalStack.map((m) => m.innerTree)];
+  }
+
+  function paneOf(treeEl) {
+    const isModal = treeEl !== $tree;
+    const paneEl = isModal ? treeEl.closest(".modal-body") : treeEl.parentElement;
+    const depthBarEl = isModal
+      ? (paneEl && paneEl.querySelector(".depth-bar"))
+      : $depthBar;
+    return { isModal, paneEl, depthBarEl };
+  }
+
+  function ensureRawEditor(treeEl) {
+    let editor = treeEl._jdRawEditor;
+    if (editor && editor.isConnected) return editor;
+    editor = el("textarea", "raw-editor");
+    editor.spellcheck = false;
+    editor.style.display = "none";
+    editor.addEventListener("blur", () => commitRawEditor(treeEl));
+    treeEl.insertAdjacentElement("afterend", editor);
+    treeEl._jdRawEditor = editor;
+    return editor;
+  }
+
+  function applyModeToPane(treeEl) {
+    const { isModal, paneEl, depthBarEl } = paneOf(treeEl);
+    if (!paneEl) return;
+    if (state.mode === "raw") {
+      const editor = ensureRawEditor(treeEl);
+      const root = isModal ? treeEl._jdRoot : state.data;
+      editor.value = root === null || root === undefined
+        ? "" : JSON.stringify(root, null, 2);
+      editor.style.display = "";
+      treeEl.style.display = "none";
+      if (depthBarEl) depthBarEl.style.display = "none";
+    } else {
+      if (treeEl._jdRawEditor) treeEl._jdRawEditor.style.display = "none";
+      treeEl.style.display = "";
+      if (depthBarEl) depthBarEl.style.display = "";
+    }
+  }
+
+  function refreshAllPanes() {
+    for (const t of allTrees()) applyModeToPane(t);
+  }
+
+  // Parse the pane's raw editor and apply the change. Returns false (and keeps
+  // the editor as-is) when the text is not valid JSON.
+  function commitRawEditor(treeEl) {
+    const editor = treeEl._jdRawEditor;
+    if (!editor || editor.style.display === "none") return true;
+    const trimmed = editor.value.trim();
+    if (trimmed === "") return true; // empty → no-op (use Clear to empty out)
+
+    const isModal = treeEl !== $tree;
+    let parsed;
+    try { parsed = JSON.parse(trimmed); }
+    catch (err) { showToast("不正なJSON: " + err.message); return false; }
+
+    const current = isModal ? treeEl._jdRoot : state.data;
+    if (JSON.stringify(parsed) === JSON.stringify(current)) return true; // unchanged
+
+    History.pushBefore();
+
+    if (isModal) {
+      treeEl._jdRoot = parsed;
+      treeEl.innerHTML = "";
+      const root = renderNode(null, parsed, true);
+      root.classList.add("root");
+      treeEl.appendChild(root);
+      const { depthBarEl } = paneOf(treeEl);
+      if (depthBarEl) renderDepthBar(depthBarEl, treeEl, parsed);
+      propagateModalChange(treeEl);
+      const entry = modalStack.find((m) => m.innerTree === treeEl);
+      if (entry && entry.minimap) entry.minimap.redraw();
+    } else {
+      state.data = parsed;
+      const text = JSON.stringify(parsed, null, 2);
+      $input.value = text;
+      saveToStorage(text);
+      renderTree(parsed, $tree);
+      $btnDownload.disabled = false;
+      $btnCopy.disabled = false;
+      $btnFormat.disabled = false;
+      refreshFormatButton();
+      revalidate();
+      scheduleMinimapRedraw();
+      refreshEmptyState();
+    }
+    return true;
+  }
+
+  function commitAllRawEditors() {
+    let ok = true;
+    for (const t of allTrees()) {
+      if (!commitRawEditor(t)) ok = false;
+    }
+    return ok;
   }
 
   // ---------- Undo / Redo history ----------
@@ -1781,6 +1926,7 @@
       refreshFormatButton();
     }
     revalidate();
+    refreshEmptyState();
   }
 
   $btnUndo.addEventListener("click", () => {
@@ -1807,6 +1953,18 @@
       e.preventDefault();
       $btnRedo.click();
     }
+  });
+
+  // v / e / r — quick mode switch (ignored while typing in a field)
+  document.addEventListener("keydown", (e) => {
+    const tag = e.target && e.target.tagName;
+    if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+    if (e.target && e.target.isContentEditable) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === "v") setMode("view");
+    else if (k === "e") setMode("edit");
+    else if (k === "r") setMode("raw");
   });
 
   // ---------- Schema validation wiring ----------
@@ -2042,6 +2200,12 @@
       attributes: true, attributeFilter: ["class"],
     });
 
+    // The minimap now flexes with the sidebar/window height; redraw the canvas
+    // whenever its own box size changes (clientHeight feeds drawBars).
+    const ro = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(redraw) : null;
+    if (ro) ro.observe(mapEl);
+
     return {
       redraw,
       updateViewport,
@@ -2050,24 +2214,34 @@
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
         mo.disconnect();
+        if (ro) ro.disconnect();
       },
     };
   }
 
-  // Main-page minimap (window scroller)
+  // Size the content area so the tree/raw editor + sidebar fill down to the
+  // window bottom (subtract <main>'s bottom padding to avoid a page scrollbar).
+  const CONTENT_BOTTOM_GAP = 12;
+  function fitContentHeight() {
+    if (!$content) return;
+    const top = $content.getBoundingClientRect().top;
+    const h = window.innerHeight - top - CONTENT_BOTTOM_GAP;
+    $content.style.height = Math.max(320, h) + "px";
+  }
+
+  // Main-page minimap (the tree scrolls inside .tree-scroll)
   const mainMinimap = createMinimap({
     treeEl: $tree,
     mapEl: $minimap,
     canvasEl: $minimapCanvas,
     vpEl: $minimapViewport,
     getViewport: () => ({
-      topInTree: -$tree.getBoundingClientRect().top,
-      visibleHeight: window.innerHeight,
+      topInTree: $treeScroll.scrollTop - $tree.offsetTop,
+      visibleHeight: $treeScroll.clientHeight,
     }),
     scrollTo: (yInTree) => {
-      const treeAbsTop = $tree.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({
-        top: Math.max(0, treeAbsTop + yInTree - window.innerHeight / 2),
+      $treeScroll.scrollTo({
+        top: Math.max(0, $tree.offsetTop + yInTree - $treeScroll.clientHeight / 2),
         behavior: "instant",
       });
     },
@@ -2075,8 +2249,9 @@
 
   function scheduleMinimapRedraw() { mainMinimap.redraw(); }
 
-  window.addEventListener("scroll", mainMinimap.updateViewport, { passive: true });
-  window.addEventListener("resize", mainMinimap.redraw);
+  $treeScroll.addEventListener("scroll", mainMinimap.updateViewport, { passive: true });
+  window.addEventListener("resize", () => { fitContentHeight(); mainMinimap.redraw(); });
+  fitContentHeight();
 
   $btnSample.addEventListener("click", () => {
     const sample = {
@@ -2125,6 +2300,9 @@
       parseAndRender(saved);
     }
   } catch (_) { /* storage unavailable */ }
+
+  // No document → start in Raw mode (the only input surface) with View/Edit off.
+  refreshEmptyState();
 
   window.JsonDiver = {
     loadText(text) { $input.value = text; parseAndRender(text); },

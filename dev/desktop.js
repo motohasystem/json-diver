@@ -54,7 +54,7 @@
 
   function ensureSaveButton() {
     if (document.getElementById("btn-save-desktop")) return;
-    const actions = document.querySelector(".dropzone-actions");
+    const actions = document.querySelector(".data-actions");
     if (!actions) return;
     const btn = document.createElement("button");
     btn.type = "button";

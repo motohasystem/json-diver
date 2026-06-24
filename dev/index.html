@@ -13,36 +13,41 @@
 </header>
 
 <main>
-  <section id="dropzone" class="dropzone">
-    <div class="dropzone-head">
-      <p class="dropzone-hint">JSONをここにドロップ／貼り付け（Ctrl+V）／下のテキストエリアに入力</p>
-      <div class="dropzone-actions">
-        <button id="btn-clear" type="button">Clear</button>
-        <button id="btn-sample" type="button">Sample</button>
-        <button id="btn-format" type="button" disabled>Format</button>
-        <button id="btn-copy" type="button" disabled>Copy</button>
-        <button id="btn-paste" type="button">Paste</button>
-        <button id="btn-download" type="button" disabled>Download</button>
-      </div>
-    </div>
-    <textarea id="input" placeholder='{"foo": 1, "bar": [1,2,3]}' spellcheck="false"></textarea>
-    <div id="error" class="error" hidden></div>
+  <!-- Hidden text mirror: holds the canonical serialized JSON used by Copy /
+       Download / Format / undo history / desktop save. Visible input is the Raw
+       editor in the tree pane. -->
+  <section id="dropzone" hidden>
+    <textarea id="input" spellcheck="false"></textarea>
   </section>
 
   <div class="content">
     <div class="tree-block">
       <div class="tree-toolbar">
-        <div id="mode-switch" class="mode-switch" data-mode="view" role="group" aria-label="モード切替">
-          <div class="mode-thumb" aria-hidden="true"></div>
-          <button class="mode-opt" data-mode="view" type="button">View</button>
-          <button class="mode-opt" data-mode="edit" type="button">Edit</button>
+        <div class="data-actions">
+          <button id="btn-sample" type="button">Sample</button>
+          <button id="btn-paste" type="button">Paste</button>
+          <button id="btn-format" type="button" disabled>Format</button>
+          <button id="btn-copy" type="button" disabled>Copy</button>
+          <button id="btn-download" type="button" disabled>Download</button>
+          <button id="btn-clear" type="button">Clear</button>
         </div>
-        <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
-        <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
-        <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>
+        <div class="mode-actions">
+          <div id="mode-switch" class="mode-switch" data-mode="view" role="group" aria-label="モード切替">
+            <div class="mode-thumb" aria-hidden="true"></div>
+            <button class="mode-opt" data-mode="view" type="button">View</button>
+            <button class="mode-opt" data-mode="edit" type="button">Edit</button>
+            <button class="mode-opt" data-mode="raw" type="button">Raw</button>
+          </div>
+          <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
+          <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
+          <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>
+        </div>
       </div>
+      <div id="error" class="error" hidden></div>
       <div id="depth-bar" class="depth-bar" aria-label="階層別の開閉"></div>
-      <section id="tree" class="tree" aria-label="JSON tree"></section>
+      <div class="tree-scroll">
+        <section id="tree" class="tree" aria-label="JSON tree"></section>
+      </div>
     </div>
     <aside class="sidebar" aria-label="Reference">
       <div class="legend">
@@ -76,6 +81,7 @@
 <div id="tooltip" class="tooltip" hidden></div>
 <div id="modal-stack" class="modal-stack" aria-hidden="true"></div>
 <div id="toast" class="toast" hidden role="status"></div>
+<div id="drop-overlay" aria-hidden="true"><div class="drop-overlay-label">JSON／ファイルをドロップ</div></div>
 
 <script src="app.js"></script>
 <script src="desktop.js"></script>

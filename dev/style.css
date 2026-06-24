@@ -73,22 +73,40 @@ main { padding: 12px 16px; }
 
 .content {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 16px;
+  /* height is set by JS (fitContentHeight) so the tree/raw editor and the
+     sidebar fill down to the window bottom and scroll internally. */
+  min-height: 0;
 }
 .content > .tree-block {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.tree-block > .tree { overflow-x: auto; }
+/* Internal scroll region for the tree (keeps the toolbar + depth bar fixed). */
+.tree-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
 .tree-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+}
+.tree-toolbar .data-actions,
+.tree-toolbar .mode-actions {
+  display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .tree-toolbar button {
   background: var(--panel-2);
@@ -124,7 +142,7 @@ main { padding: 12px 16px; }
   top: 2px;
   bottom: 2px;
   left: 2px;
-  width: calc(50% - 2px);
+  width: calc((100% - 4px) / 3);
   background: var(--accent);
   border-radius: 12px;
   transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
@@ -133,9 +151,13 @@ main { padding: 12px 16px; }
 .mode-switch[data-mode="edit"] .mode-thumb {
   transform: translateX(100%);
 }
+.mode-switch[data-mode="raw"] .mode-thumb {
+  transform: translateX(200%);
+}
 .mode-switch .mode-opt {
   position: relative;
   z-index: 1;
+  flex: 1 1 0;
   background: transparent;
   border: none;
   color: var(--fg);
@@ -151,6 +173,62 @@ main { padding: 12px 16px; }
 .mode-switch .mode-opt:hover {
   border-color: transparent;
   background: transparent;
+}
+.mode-switch .mode-opt:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Full-window drag & drop overlay (shown while dragging a file/text over) */
+#drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 17, 21, 0.72);
+  border: 3px dashed var(--accent);
+  pointer-events: none;
+}
+body.drag-over #drop-overlay { display: flex; }
+.drop-overlay-label {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  padding: 14px 22px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+}
+
+/* Raw (whole-pane JSON text) editor — swaps in for the tree in Raw mode */
+.raw-editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  outline: none;
+}
+.raw-editor:focus { border-color: var(--accent); }
+/* Both panes: the raw editor fills its scroll region (main: .tree-scroll,
+   modal: .modal-body), so it follows the window-bounded content height. */
+.tree-scroll > .raw-editor,
+.modal-body .raw-editor {
+  min-height: calc(100% - 4px);
+  resize: none;
 }
 
 /* Depth toolbar (column headers) + continuous vertical guides */
@@ -180,7 +258,7 @@ main { padding: 12px 16px; }
 
 /* Vertical guides over the depth bar and tree, every --depth-step */
 .depth-bar,
-.tree-block > .tree,
+.tree-scroll > .tree,
 .modal-body > .tree {
   position: relative;
   background-image: repeating-linear-gradient(
@@ -194,7 +272,7 @@ main { padding: 12px 16px; }
 
 /* Active column highlight, driven by --highlight-x / --highlight-opacity */
 .depth-bar::before,
-.tree-block > .tree::before,
+.tree-scroll > .tree::before,
 .modal-body > .tree::before {
   content: "";
   position: absolute;
@@ -243,8 +321,8 @@ main { padding: 12px 16px; }
 .sidebar {
   width: 230px;
   flex-shrink: 0;
-  position: sticky;
-  top: 12px;
+  /* Stretches to the bounded .content height; minimap flexes to fill. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -781,12 +859,19 @@ body.dnd-active { user-select: none; }
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
+  /* Lowest-priority block in the sidebar: absorbs leftover height and is the
+     first to shrink, so the minimap follows the textarea / window height. */
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .minimap {
   position: relative;
   width: 100%;
-  height: calc(100vh - 280px);
-  min-height: 200px;
+  flex: 1 1 0;
+  min-height: 120px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 4px;
