@@ -1,0 +1,14 @@
+{
+  "name": "json-diver-desktop",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Tauri 2 shell for JSON Diver (Windows .json file association)",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icon": "tauri icon ../dev/favicon.svg"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}

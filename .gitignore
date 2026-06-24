@@ -1,0 +1,6 @@
+# Local Claude Code config / agent state
+.claude/
+
+# OS / editor cruft
+Thumbs.db
+.DS_Store
