@@ -6,7 +6,6 @@
   document.documentElement.classList.add("tauri");
 
   const { invoke } = T.core;
-  const { listen } = T.event;
 
   let currentPath = null;
 
@@ -65,19 +64,36 @@
     actions.appendChild(btn);
   }
 
+  function ensureNewWindowButton() {
+    if (document.getElementById("btn-newwindow-desktop")) return;
+    const actions = document.querySelector(".data-actions");
+    if (!actions) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "btn-newwindow-desktop";
+    btn.textContent = "New Window";
+    btn.title = "Open a new window (Ctrl+N)";
+    btn.addEventListener("click", () => invoke("open_new_window"));
+    actions.appendChild(btn);
+  }
+
   function bindShortcuts() {
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         saveCurrent();
       }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        invoke("open_new_window");
+      }
     });
   }
 
   function start() {
     ensureSaveButton();
+    ensureNewWindowButton();
     bindShortcuts();
-    listen("file-opened", (e) => openFile(e.payload && e.payload.path ? e.payload.path : e.payload));
     invoke("get_initial_file").then((p) => { if (p) openFile(p); });
   }
 
