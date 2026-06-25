@@ -37,6 +37,10 @@ fn pick_json_file_from_args(args: &[String]) -> Option<PathBuf> {
 
 /// Open a new window in this process. If `path` is given, it is registered so the
 /// window's frontend can fetch it via `get_initial_file`.
+/// Create a new window. MUST be called from a non-main thread (an async command or the
+/// single-instance callback). `build()` then dispatches the actual creation onto the main
+/// event loop while keeping it free to pump WebView2 init — building it directly on the main
+/// thread instead leaves the window blank and unresponsive (close button does nothing).
 fn spawn_window(app: &AppHandle, path: Option<PathBuf>) {
     let label = format!("win-{}", NEXT_WINDOW_ID.fetch_add(1, Ordering::Relaxed));
     if let Some(p) = path {
@@ -67,8 +71,10 @@ fn set_current_file(window: WebviewWindow, path: String, state: State<'_, AppSta
     }
 }
 
+// `async` is required: it makes Tauri run this off the main thread so window creation
+// dispatches correctly. A sync command would build on the main thread and hang the webview.
 #[tauri::command]
-fn open_new_window(app: AppHandle) {
+async fn open_new_window(app: AppHandle) {
     spawn_window(&app, None);
 }
 
