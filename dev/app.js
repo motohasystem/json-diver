@@ -1397,11 +1397,13 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = downloadFilename();
+    const name = downloadFilename();
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    showToast(`ダウンロードしました: ${name}`, 2500, "ok");
   });
 
   // paste anywhere — unless a text field (raw editor, schema box, …) is focused
@@ -1508,6 +1510,9 @@
     scheduleMinimapRedraw();
     revalidate();
     renderDepthBar($depthBar, $tree, state.data);
+    // In Raw mode refreshEmptyState() won't re-run setMode (already "raw"), so the raw
+    // editor textarea keeps its old text. Re-sync every pane to empty its value.
+    refreshAllPanes();
     refreshEmptyState(); // empty → back to Raw input
   });
 

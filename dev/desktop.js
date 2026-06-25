@@ -6,6 +6,7 @@
   document.documentElement.classList.add("tauri");
 
   const { invoke } = T.core;
+  const { listen } = T.event;
 
   let currentPath = null;
 
@@ -101,10 +102,26 @@
     });
   }
 
+  function bindNativeFileDrop() {
+    // Tauri intercepts OS file drops, so the webview's HTML5 drop events never fire.
+    // Subscribe to Tauri's drag-drop events and open the dropped file by its real path
+    // (so Ctrl+S can overwrite the original). Mirror the web overlay via body.drag-over.
+    listen("tauri://drag-enter", () => document.body.classList.add("drag-over"));
+    listen("tauri://drag-leave", () => document.body.classList.remove("drag-over"));
+    listen("tauri://drag-drop", (e) => {
+      document.body.classList.remove("drag-over");
+      const paths = (e.payload && e.payload.paths) || [];
+      if (!paths.length) return;
+      const jsonPath = paths.find((p) => /\.json$/i.test(p)) || paths[0];
+      openFile(jsonPath);
+    });
+  }
+
   function start() {
     ensureSaveButton();
     ensureNewWindowButton();
     bindExternalLinks();
+    bindNativeFileDrop();
     bindShortcuts();
     // The topbar is hidden via `html.tauri` (added above), but app.js already ran its
     // initial height fit while the topbar was still visible — leaving an empty gap at the

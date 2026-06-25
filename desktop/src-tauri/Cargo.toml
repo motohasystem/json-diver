@@ -1,6 +1,6 @@
 [package]
 name = "json-diver"
-version = "0.3.1"
+version = "0.3.2"
 description = "JSON Diver desktop"
 edition = "2021"
 rust-version = "1.77"
