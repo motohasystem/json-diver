@@ -894,3 +894,23 @@ body.dnd-active { user-select: none; }
   border-bottom: 1px solid var(--accent);
   pointer-events: none;
 }
+
+/* About / links block, pinned to the bottom of the sidebar (web + desktop). */
+.app-info {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.app-info-ver { letter-spacing: 0.02em; }
+.app-info-ver #app-version { color: var(--fg); }
+.app-link {
+  color: var(--accent);
+  text-decoration: none;
+  width: fit-content;
+}
+.app-link:hover { text-decoration: underline; }

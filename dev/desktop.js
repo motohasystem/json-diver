@@ -90,10 +90,26 @@
     });
   }
 
+  function bindExternalLinks() {
+    // In the webview, open external http(s) links in the system browser
+    // instead of navigating away inside the app window.
+    document.querySelectorAll("a[data-external]").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        invoke("open_external", { url: a.href });
+      });
+    });
+  }
+
   function start() {
     ensureSaveButton();
     ensureNewWindowButton();
+    bindExternalLinks();
     bindShortcuts();
+    // The topbar is hidden via `html.tauri` (added above), but app.js already ran its
+    // initial height fit while the topbar was still visible — leaving an empty gap at the
+    // bottom. Re-fit now that the desktop layout (no topbar, extra buttons) is in place.
+    window.dispatchEvent(new Event("resize"));
     invoke("get_initial_file").then((p) => { if (p) openFile(p); });
   }
 

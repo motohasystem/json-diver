@@ -79,6 +79,16 @@ async fn open_new_window(app: AppHandle) {
 }
 
 #[tauri::command]
+fn open_external(url: String) {
+    // Open http(s) links in the user's default browser (no console window flash).
+    if url.starts_with("https://") || url.starts_with("http://") {
+        let _ = std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn();
+    }
+}
+
+#[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     let p = Path::new(&path);
     std::fs::read_to_string(p).map_err(|e| format!("read failed: {e}"))
@@ -124,6 +134,7 @@ fn main() {
             get_initial_file,
             set_current_file,
             open_new_window,
+            open_external,
             read_text_file,
             write_text_file,
             save_as_dialog,
