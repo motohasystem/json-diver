@@ -6,8 +6,8 @@ It reuses `../dev/` as-is for the front end (pointed at directly by Tauri's
 
 ## Prerequisites
 
-- **Node.js**: already installed (verified with the v24 line)
-- **Rust**: not installed — set it up with the steps below
+- **Node.js**: v24 line verified
+- **Rust**: 1.96 verified — install it with the steps below if `cargo` is missing
 
 ### Installing the Rust toolchain (first time only)
 
@@ -46,6 +46,21 @@ npm run build    # produce the NSIS installer
 
 Build output:
 `desktop/src-tauri/target/release/bundle/nsis/JSON Diver_<version>_x64-setup.exe`
+
+### Building from a WSL checkout
+
+Windows `cargo` cannot build from a UNC path (`\\wsl.localhost\...`), so a
+checkout that lives in WSL cannot be built in place. `build-windows.bat` handles
+that: run it from `cmd.exe` and it keeps a Windows-side clone, refreshes it from
+`origin/main`, and runs the build there.
+
+```bat
+build-windows.bat [build directory]
+```
+
+The build directory defaults to `%USERPROFILE%\work\json-diver`. That clone is a
+build-only copy — it is hard-reset to `origin/main` on every run, so commit and
+push your changes before building, and never edit it directly.
 
 ## Associating `.json`
 
