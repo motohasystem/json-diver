@@ -1,61 +1,77 @@
 # JSON Diver
 
-JSONをコピペまたはD&Dすると、ツリー構造の外観を簡易に把握できる解析ツール。
-Vanilla JS + HTML/CSS の単体動作、ビルド不要。
+An analysis tool that shows the shape of a JSON tree at a glance: paste or drop
+some JSON and browse it. Vanilla JS + HTML/CSS, standalone, no build step.
 
-## 使い方
+## Usage
 
-`index.html` をブラウザで直接開くだけ。
+Just open `index.html` in a browser.
 
-- **入力**：上部テキストエリアにペースト、D&D、または直接入力
-- **Sample** ボタン：エスケープ済みJSON・巨大配列を含むデモを読み込み
-- **Clear** ボタン：入力と保存をクリア
-- 入力内容は `localStorage` に保存され、リロードで復元される
+- **Input**: paste, drag & drop, or type straight into the Raw editor
+- **Sample** button: load a demo containing escaped JSON and a large array
+- **Clear** button: clear the input and the stored copy
+- The input is saved to `localStorage` and restored on reload
 
-## 機能
+## Features
 
-### ツリー表示
-- 型ごとのアイコン（`{}` `[]` 🔤 🔢 ☑ ⭕ 🪆）と凡例
-- プリミティブ値はインライン表示（長文字列は省略、ホバーで全文）
-- object/array は要素数 `{N}` `[N]` を併記
-- 初期状態は全展開
-- 行のホバーで `▾▾` / `▸▸` ボタンが出現：兄弟ノードをまとめてトグル
-  - クリック時にレイアウト変化分をスムーススクロールで補正し、クリックした行がカーソル位置に戻る
-- 折りたたみ状態のコンテナにホバーすると、中身のミニツリーをツールチップ表示
+### Tree rendering
+- Per-type icons (`{}` `[]` 🔤 🔢 ☑ ⭕ 🪆) with a legend
+- Primitive values are shown inline (long strings truncated, full text on hover)
+- Objects/arrays also show their child count as `{N}` / `[N]`
+- Fully expanded initially
+- Hovering a row reveals `▾▾` / `▸▸` buttons that toggle sibling nodes together
+  - The layout shift is corrected with a smooth scroll on click, so the row you
+    clicked returns to the cursor
+- Hovering a collapsed container shows a mini tree of its contents in a tooltip
 
-### エスケープ済みJSON（🪆）
-- 値がJSON文字列（`{`/`[` で始まり、parseに成功）の場合、🪆 アイコンで自動検出
-- ホバーで内部構造のプレビュー表示
-- クリックでモーダルにズームイン（中身を大きく再描画）
-- 入れ子のエスケープも対応（モーダルが重なって `深さ N` バッジを表示）
-- Esc または背景クリックで一段ずつ閉じる
+### Text form (Pretty toggle)
+- One sticky toggle decides how JSON text is written everywhere: the Raw editor,
+  the hidden `#input` mirror behind Copy/Download, and anything arriving by paste
+  or text drop
+  - ON (default) … 2-space pretty print
+  - OFF … minified to one line
+- Flipping it re-serializes the current document and any open Raw editor in place
+- Pasting into a Raw editor re-serializes the whole resulting text when it parses
+  as JSON; a fragment pasted mid-document falls through to the native paste
+- The preference is stored in `localStorage` (`json-diver:autoFormat`)
 
-### ミニマップ
-- 右側サイドバーにツリー全体の縮小表示
-- 型別カラーバー、行ごとの実描画幅を反映
-- 半透明のビューポートインジケータが現在表示範囲を示す
-- クリック／ドラッグで該当位置へ即時スクロール
-- モーダル内にも独立したミニマップ
+### Escaped JSON (🪆)
+- When a value is a JSON string (starts with `{` / `[` and parses), it is detected
+  automatically and marked with the 🪆 icon
+- Hover for a preview of the inner structure
+- Click to zoom into a modal (the contents are re-rendered at full size)
+- Nesting is supported (modals stack up and show a `depth N` badge)
+- Esc or a backdrop click closes one level at a time
 
-### パフォーマンス
-- 配列・object 子要素が 50 件超のとき、初期は 50 件のみ描画
-- 残りはスクロール時に IntersectionObserver で順次追加読込
-- ミニマップ再描画は MutationObserver + requestAnimationFrame でデバウンス
+### Minimap
+- A miniature of the whole tree in the right sidebar
+- Colored bars per type, reflecting each row's actual rendered width
+- A translucent viewport indicator marks the range currently on screen
+- Click/drag to scroll straight to that position
+- Modals get their own independent minimap
 
-## ファイル構成
+### Performance
+- Containers with more than 50 children render only the first 50 initially
+- The rest is appended as you scroll, via IntersectionObserver
+- Minimap redraws are debounced with MutationObserver + requestAnimationFrame
 
-| ファイル | 役割 |
+## Files
+
+| File | Role |
 |---|---|
-| `index.html` | エントリ、レイアウト |
-| `style.css` | ダークテーマのスタイル |
-| `app.js` | パース・描画・ツールチップ・モーダル・ミニマップ |
+| `index.html` | Entry point, layout |
+| `style.css` | Dark theme styling |
+| `app.js` | Parsing, rendering, tooltips, modals, minimap |
 
-## 技術メモ
+## Implementation notes
 
-- **エスケープJSON判定**：trim 後に `{` または `[` で始まる文字列に限り `JSON.parse` を試行（明示マーク方式）
-- **`findScroller`**：要素が縦スクロール可能か `scrollHeight - clientHeight > 1` で判定（`overflow-x: auto` による副作用を回避）
-- **スムーススクロール**：ブラウザ実装に依存しないよう RAF + ease-out cubic で自前実装
+- **Escaped-JSON detection**: `JSON.parse` is attempted only for strings that start
+  with `{` or `[` after trimming (explicit-marker approach)
+- **`findScroller`**: decides whether an element scrolls vertically via
+  `scrollHeight - clientHeight > 1` (avoids side effects from `overflow-x: auto`)
+- **Smooth scrolling**: implemented by hand with RAF + ease-out cubic, so it does
+  not depend on browser behavior
 
-## ライセンス
+## License
 
-未指定（社内実験用）
+Unspecified (internal experiment)

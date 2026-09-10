@@ -25,8 +25,8 @@
   const $btnSample = document.getElementById("btn-sample");
   const $btnDownload = document.getElementById("btn-download");
   const $btnCopy = document.getElementById("btn-copy");
-  const $btnFormat = document.getElementById("btn-format");
   const $btnPaste = document.getElementById("btn-paste");
+  const $btnAutoFormat = document.getElementById("btn-autoformat");
   const $modeSwitch = document.getElementById("mode-switch");
   const $btnUndo = document.getElementById("btn-undo");
   const $btnRedo = document.getElementById("btn-redo");
@@ -54,6 +54,7 @@
     data: null,       // current parsed JSON (single source of truth)
     schema: null,     // current parsed schema (added in MVP-3)
     mode: "view",     // "view" | "edit" | "raw" (was editMode boolean)
+    autoFormat: true, // true: 2-space pretty JSON, false: minified (1 line)
     violations: [],   // current schema violations (added in MVP-3)
   };
 
@@ -408,7 +409,7 @@
 
       const btn = el("button", "depth-btn", "0");
       btn.type = "button";
-      btn.title = `深さ ${d} のコンテナをまとめて開閉`;
+      btn.title = `Expand / collapse all containers at depth ${d}`;
       btn.addEventListener("click", () => toggleDepth(treeEl, d));
       btn.addEventListener("mouseenter", () => {
         if (scopeEl) {
@@ -459,10 +460,10 @@
       } else {
         btn.classList.add("state-mixed");
       }
-      const stateText = btn.classList.contains("state-open") ? "全展開"
-                      : btn.classList.contains("state-mixed") ? "一部展開"
-                      : "全閉じ";
-      btn.title = `深さ ${d}: コンテナ ${s.count} 個 (${stateText})`;
+      const stateText = btn.classList.contains("state-open") ? "all open"
+                      : btn.classList.contains("state-mixed") ? "partly open"
+                      : "all closed";
+      btn.title = `Depth ${d}: ${s.count} container${s.count === 1 ? "" : "s"} (${stateText})`;
     }
   }
 
@@ -558,7 +559,7 @@
     if (!isRoot) {
       const handle = el("span", "handle", "⋮⋮");
       handle.draggable = true;
-      handle.title = "ドラッグして移動";
+      handle.title = "Drag to move";
       row.appendChild(handle);
     }
 
@@ -734,7 +735,7 @@
   function buildCopyButton(node) {
     const btn = el("button", "row-act row-act-copy", "📋");
     btn.type = "button";
-    btn.title = "このノードのJSONをコピー";
+    btn.title = "Copy this node as JSON";
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       hideTooltip();
@@ -744,18 +745,18 @@
       const rootVal = findTreeRootValue(node);
       const value = path.length === 0 ? rootVal : Path.get(rootVal, path);
       if (value === undefined) {
-        showToast("コピー対象が見つかりません");
+        showToast("Nothing to copy");
         return;
       }
-      const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      const text = typeof value === "string" ? value : serializeDoc(value);
       try {
         await navigator.clipboard.writeText(text);
-        showToast("クリップボードにコピーしました", 1500, "ok");
+        showToast("Copied to clipboard", 1500, "ok");
         btn.classList.remove("copied");
         void btn.offsetWidth;
         btn.classList.add("copied");
       } catch (err) {
-        showToast(`コピー失敗: ${err.message}`);
+        showToast(`Copy failed: ${err.message}`);
       }
     });
     return btn;
@@ -772,7 +773,7 @@
       const sibs = siblingContainers();
       const anyOpen = sibs.some((n) => !n.classList.contains("collapsed"));
       btn.textContent = anyOpen ? "▸▸" : "▾▾";
-      btn.title = anyOpen ? "兄弟を全閉じ" : "兄弟を全展開";
+      btn.title = anyOpen ? "Collapse siblings" : "Expand siblings";
     }
     btn.addEventListener("mouseenter", refresh);
     btn.addEventListener("focus", refresh);
@@ -1014,12 +1015,12 @@
     if (type === "string") return { ok: true, value: text };
     if (type === "number") {
       const s = text.trim();
-      if (s === "") return { ok: false, error: "数値を入力してください" };
+      if (s === "") return { ok: false, error: "Enter a number" };
       const n = Number(s);
-      if (!Number.isFinite(n)) return { ok: false, error: `数値として無効: "${s}"` };
+      if (!Number.isFinite(n)) return { ok: false, error: `Not a valid number: "${s}"` };
       return { ok: true, value: n };
     }
-    return { ok: false, error: "サポート外の型" };
+    return { ok: false, error: "Unsupported type" };
   }
 
   function startBooleanEdit(node, valSpan) {
@@ -1091,7 +1092,7 @@
 
     if (isModal) propagateModalChange(treeEl);
 
-    const text = JSON.stringify(state.data, null, 2);
+    const text = serializeDoc(state.data);
     $input.value = text;
     saveToStorage(text);
 
@@ -1130,7 +1131,7 @@
       const isParentModal = parentTree.classList.contains("modal-tree");
       const parentRoot = isParentModal ? parentTree._jdRoot : state.data;
       const value = entry.innerTree._jdRoot;
-      const stringified = JSON.stringify(value, null, 2);
+      const stringified = serializeDoc(value);
       if (parentPath.length === 0) {
         if (isParentModal) parentTree._jdRoot = stringified;
         else state.data = stringified;
@@ -1214,7 +1215,7 @@
     const keyLabel = key === null || key === undefined
       ? "(root)"
       : (typeof key === "number" ? `[${key}]` : key);
-    const depthBadge = modalStack.length > 0 ? ` <span class="modal-depth">深さ ${modalStack.length + 1}</span>` : "";
+    const depthBadge = modalStack.length > 0 ? ` <span class="modal-depth">depth ${modalStack.length + 1}</span>` : "";
     title.innerHTML = `Zoom: <b>${escapeHtml(String(keyLabel))}</b> &middot; escaped JSON${depthBadge}`;
     head.appendChild(title);
     const headActions = el("div", "modal-head-actions");
@@ -1240,7 +1241,7 @@
     const depthDisposer = watchDepthStates(innerDepthBar, innerTree);
 
     const sidebar = el("div", "modal-sidebar");
-    sidebar.appendChild(el("div", "minimap-title", "ミニマップ"));
+    sidebar.appendChild(el("div", "minimap-title", "Minimap"));
     const mm = el("div", "minimap");
     const mmCanvas = document.createElement("canvas");
     const mmVp = el("div", "minimap-viewport");
@@ -1320,7 +1321,6 @@
       $tree.innerHTML = ""; setError(""); saveToStorage("");
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
-      $btnFormat.disabled = true;
       revalidate();
       renderDepthBar($depthBar, $tree, state.data);
       if (!opts.preserveHistory) History.reset();
@@ -1335,8 +1335,6 @@
       saveToStorage(text);
       $btnDownload.disabled = false;
       $btnCopy.disabled = false;
-      $btnFormat.disabled = false;
-      refreshFormatButton();
       revalidate();
       if (!opts.preserveHistory) History.reset();
       refreshEmptyState();
@@ -1344,43 +1342,82 @@
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
-      $btnFormat.disabled = true;
     }
   }
 
-  // In Raw mode the visible text is the raw editor; elsewhere it's the canonical
-  // $input mirror (used by Copy/Download).
-  function formatTarget() {
-    if (state.mode === "raw" && $tree._jdRawEditor &&
-        $tree._jdRawEditor.style.display !== "none") {
-      return $tree._jdRawEditor;
-    }
-    return $input;
-  }
+  // ---------- Pretty / minified (document text form) ----------
 
-  // Format / Minify toggle. The label reflects the next action, derived from
-  // whether the current text is already pretty-printed (contains newlines).
-  function refreshFormatButton() {
-    const minified = !/\n/.test(formatTarget().value.trim());
-    $btnFormat.textContent = minified ? "Format" : "Minify";
-    $btnFormat.title = minified ? "整形（インデント付き）" : "圧縮（1行に）";
-  }
+  // One sticky switch replaces the old Format/Minify button: it decides how JSON
+  // text is written everywhere — the Raw editor, the $input mirror behind
+  // Copy/Download, and anything arriving by paste or text drop.
+  //   ON  (default) … 2-space pretty print
+  //   OFF           … minified, one line
+  const STORAGE_KEY_AUTOFMT = "json-diver:autoFormat";
 
-  $btnFormat.addEventListener("click", () => {
-    const target = formatTarget();
-    const text = target.value.trim();
-    if (!text) return;
-    let value;
-    try { value = JSON.parse(text); }
-    catch (err) { showToast(`不正なJSON: ${err.message}`); return; }
-    const minified = !/\n/.test(text);
-    const next = minified
+  function serializeDoc(value) {
+    return state.autoFormat
       ? JSON.stringify(value, null, 2)
       : JSON.stringify(value);
-    target.value = next;
-    if (target === $input) saveToStorage(next); // raw editor persists on commit
-    refreshFormatButton();
+  }
+
+  // Re-serialize `text` into the current form; non-JSON text is handed back
+  // untouched (so a half-finished edit is never mangled).
+  function normalizeText(text) {
+    const trimmed = (text || "").trim();
+    if (!trimmed) return text;
+    try { return serializeDoc(JSON.parse(trimmed)); }
+    catch (_) { return text; }
+  }
+
+  function setAutoFormat(on) {
+    state.autoFormat = !!on;
+    $btnAutoFormat.classList.toggle("active", state.autoFormat);
+    $btnAutoFormat.setAttribute("aria-pressed", String(state.autoFormat));
+    $btnAutoFormat.title = state.autoFormat
+      ? "Pretty print ON — click to minify"
+      : "Minified — click to pretty print";
+    try { localStorage.setItem(STORAGE_KEY_AUTOFMT, state.autoFormat ? "1" : "0"); }
+    catch (_) { /* storage unavailable */ }
+  }
+
+  // Rewrite everything that holds JSON text into the current form. Raw editors
+  // are re-serialized from their own text so uncommitted edits survive.
+  function reserializeAll() {
+    if (state.data !== null && state.data !== undefined) {
+      const text = serializeDoc(state.data);
+      $input.value = text;
+      saveToStorage(text);
+    }
+    for (const t of allTrees()) {
+      const editor = t._jdRawEditor;
+      if (!editor || editor.style.display === "none") continue;
+      editor.value = normalizeText(editor.value);
+    }
+  }
+
+  $btnAutoFormat.addEventListener("click", () => {
+    setAutoFormat(!state.autoFormat);
+    reserializeAll();
+    showToast(state.autoFormat ? "Pretty printed" : "Minified to one line", 1500, "ok");
   });
+
+  // Paste inside a raw editor: replace the selection ourselves so the resulting
+  // whole-document text can be re-serialized. Falls through to the native paste
+  // when the result is not valid JSON (e.g. a fragment dropped mid-document).
+  function handleRawPaste(editor, e) {
+    const cb = e.clipboardData || window.clipboardData;
+    if (!cb) return;
+    const pasted = cb.getData("text");
+    if (!pasted || !pasted.trim()) return;
+    const before = editor.value.slice(0, editor.selectionStart);
+    const after = editor.value.slice(editor.selectionEnd);
+    const next = before + pasted + after;
+    const normalized = normalizeText(next);
+    if (normalized === next) return; // not JSON (or already in form) → native paste
+    e.preventDefault();
+    editor.value = normalized;
+    editor.selectionStart = editor.selectionEnd = normalized.length;
+  }
 
   function pad2(n) { return String(n).padStart(2, "0"); }
   function downloadFilename() {
@@ -1403,15 +1440,16 @@
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    showToast(`ダウンロードしました: ${name}`, 2500, "ok");
+    showToast(`Downloaded: ${name}`, 2500, "ok");
   });
 
   // paste anywhere — unless a text field (raw editor, schema box, …) is focused
   document.addEventListener("paste", (e) => {
     const a = document.activeElement;
     if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return; // native
-    const text = (e.clipboardData || window.clipboardData).getData("text");
-    if (text) {
+    const raw = (e.clipboardData || window.clipboardData).getData("text");
+    if (raw) {
+      const text = normalizeText(raw);
       $input.value = text;
       parseAndRender(text);
       e.preventDefault();
@@ -1452,8 +1490,9 @@
       parseAndRender(text);
       return;
     }
-    const text = dt.getData("text");
-    if (text) {
+    const dropped = dt.getData("text");
+    if (dropped) {
+      const text = normalizeText(dropped);
       $input.value = text;
       parseAndRender(text);
     }
@@ -1464,9 +1503,9 @@
     if (!text.trim()) return;
     try {
       await navigator.clipboard.writeText(text);
-      showToast("クリップボードにコピーしました", 1500, "ok");
+      showToast("Copied to clipboard", 1500, "ok");
     } catch (err) {
-      showToast(`コピー失敗: ${err.message}`);
+      showToast(`Copy failed: ${err.message}`);
     }
   });
 
@@ -1475,28 +1514,29 @@
     try {
       text = await navigator.clipboard.readText();
     } catch (err) {
-      showToast(`貼り付け失敗: ${err.message}`);
+      showToast(`Paste failed: ${err.message}`);
       return;
     }
     if (!text || !text.trim()) {
-      showToast("クリップボードが空です");
+      showToast("Clipboard is empty");
       return;
     }
     // Pre-validate so a failure doesn't leak an empty undo step
     try { JSON.parse(text); }
-    catch (err) { showToast(`不正なJSON: ${err.message}`); return; }
+    catch (err) { showToast(`Invalid JSON: ${err.message}`); return; }
 
     if (state.data !== null && state.data !== undefined) {
-      if (!confirm("現在のデータが置き換わります。続行しますか？")) return;
+      if (!confirm("This will replace the current data. Continue?")) return;
     }
     History.pushBefore(); // always undoable, even when pasting into empty
-    $input.value = text;
-    parseAndRender(text, { preserveHistory: true });
+    const next = normalizeText(text);
+    $input.value = next;
+    parseAndRender(next, { preserveHistory: true });
   });
 
   $btnClear.addEventListener("click", () => {
     if (state.data !== null && state.data !== undefined) {
-      if (!confirm("現在のデータをクリアします。続行しますか？")) return;
+      if (!confirm("This will clear the current data. Continue?")) return;
       History.pushBefore();
     }
     state.data = null;
@@ -1506,7 +1546,6 @@
     saveToStorage("");
     $btnDownload.disabled = true;
     $btnCopy.disabled = true;
-    $btnFormat.disabled = true;
     scheduleMinimapRedraw();
     revalidate();
     renderDepthBar($depthBar, $tree, state.data);
@@ -1586,7 +1625,7 @@
       let reason = "";
       if (Array.isArray(sourceParentRef) && !Array.isArray(targetParentRef)) {
         valid = false;
-        reason = "array要素はキー名がないためobjectには移動できません";
+        reason = "Array items have no key, so they cannot move into an object";
       }
       // Key collision: object → object move where target already has same key
       if (
@@ -1596,7 +1635,7 @@
         Object.prototype.hasOwnProperty.call(targetParentRef, sourceKey)
       ) {
         valid = false;
-        reason = `キー "${sourceKey}" が移動先に既に存在します`;
+        reason = `Key "${sourceKey}" already exists in the target`;
       }
 
       // Schema gate (MVP-4): would this placement increase violations?
@@ -1613,7 +1652,7 @@
         }
         if (!allowed) {
           valid = false;
-          reason = "スキーマ違反になります";
+          reason = "Would violate the schema";
         }
       }
 
@@ -1659,7 +1698,7 @@
       try {
         applyMove(draft, DnD.source.path, targetPath, position);
       } catch (err) {
-        showToast(`移動に失敗しました: ${err.message}`);
+        showToast(`Move failed: ${err.message}`);
         return;
       }
 
@@ -1667,7 +1706,7 @@
         const oldCount = state.violations.length;
         const newCount = Schema.validate(draft).length;
         if (newCount > oldCount) {
-          showToast(`スキーマ違反が増加するためロールバックしました（${oldCount} → ${newCount}）`);
+          showToast(`Rolled back: schema violations would increase (${oldCount} → ${newCount})`);
           return;
         }
       }
@@ -1675,7 +1714,7 @@
       // Commit (with undo history)
       History.pushBefore();
       state.data = draft;
-      const text = JSON.stringify(state.data, null, 2);
+      const text = serializeDoc(state.data);
       $input.value = text;
       saveToStorage(text);
       renderTree(state.data, $tree);
@@ -1741,7 +1780,7 @@
     const sw = el("div", "mode-switch");
     sw.dataset.mode = state.mode;
     sw.setAttribute("role", "group");
-    sw.setAttribute("aria-label", "モード切替");
+    sw.setAttribute("aria-label", "Mode");
     const thumb = el("div", "mode-thumb");
     thumb.setAttribute("aria-hidden", "true");
     sw.appendChild(thumb);
@@ -1778,6 +1817,7 @@
     editor.spellcheck = false;
     editor.style.display = "none";
     editor.addEventListener("blur", () => commitRawEditor(treeEl));
+    editor.addEventListener("paste", (e) => handleRawPaste(editor, e));
     treeEl.insertAdjacentElement("afterend", editor);
     treeEl._jdRawEditor = editor;
     return editor;
@@ -1789,8 +1829,7 @@
     if (state.mode === "raw") {
       const editor = ensureRawEditor(treeEl);
       const root = isModal ? treeEl._jdRoot : state.data;
-      editor.value = root === null || root === undefined
-        ? "" : JSON.stringify(root, null, 2);
+      editor.value = root === null || root === undefined ? "" : serializeDoc(root);
       editor.style.display = "";
       treeEl.style.display = "none";
       if (depthBarEl) depthBarEl.style.display = "none";
@@ -1816,7 +1855,7 @@
     const isModal = treeEl !== $tree;
     let parsed;
     try { parsed = JSON.parse(trimmed); }
-    catch (err) { showToast("不正なJSON: " + err.message); return false; }
+    catch (err) { showToast("Invalid JSON: " + err.message); return false; }
 
     const current = isModal ? treeEl._jdRoot : state.data;
     if (JSON.stringify(parsed) === JSON.stringify(current)) return true; // unchanged
@@ -1836,14 +1875,12 @@
       if (entry && entry.minimap) entry.minimap.redraw();
     } else {
       state.data = parsed;
-      const text = JSON.stringify(parsed, null, 2);
+      const text = serializeDoc(parsed);
       $input.value = text;
       saveToStorage(text);
       renderTree(parsed, $tree);
       $btnDownload.disabled = false;
       $btnCopy.disabled = false;
-      $btnFormat.disabled = false;
-      refreshFormatButton();
       revalidate();
       scheduleMinimapRedraw();
       refreshEmptyState();
@@ -1920,15 +1957,12 @@
       $tree.innerHTML = "";
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
-      $btnFormat.disabled = true;
       renderDepthBar($depthBar, $tree, state.data);
       scheduleMinimapRedraw();
     } else {
       renderTree(snapshot.data, $tree);
       $btnDownload.disabled = false;
       $btnCopy.disabled = false;
-      $btnFormat.disabled = false;
-      refreshFormatButton();
     }
     revalidate();
     refreshEmptyState();
@@ -2280,10 +2314,15 @@
       }),
       largeList: Array.from({ length: 137 }, (_, i) => ({ i, v: `item-${i}` })),
     };
-    const text = JSON.stringify(sample, null, 2);
+    const text = serializeDoc(sample);
     $input.value = text;
     parseAndRender(text);
   });
+
+  // Restore the Pretty preference (default: on)
+  try {
+    setAutoFormat(localStorage.getItem(STORAGE_KEY_AUTOFMT) !== "0");
+  } catch (_) { setAutoFormat(true); }
 
   // One-time cleanup of legacy storage key (renamed "json-outline" → "json-diver")
   try { localStorage.removeItem("json-outline:lastInput"); } catch (_) {}

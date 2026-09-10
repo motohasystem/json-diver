@@ -1,68 +1,71 @@
 # JSON Diver — Desktop (Tauri 2 / Windows)
 
-`.json` ファイルをダブルクリックで開ける、Windows 用デスクトップ版。
-フロントは `../dev/` をそのまま再利用する（Tauri の `frontendDist` に直接指定）。
+The Windows desktop edition, which opens `.json` files on double-click.
+It reuses `../dev/` as-is for the front end (pointed at directly by Tauri's
+`frontendDist`).
 
-## 前提
+## Prerequisites
 
-- **Node.js**: 既にインストール済み（v24 系で確認）
-- **Rust**: 未インストール。下記の手順で入れる必要あり
+- **Node.js**: already installed (verified with the v24 line)
+- **Rust**: not installed — set it up with the steps below
 
-### Rust ツールチェインのインストール（初回のみ）
+### Installing the Rust toolchain (first time only)
 
-1. PowerShell を開いて以下を実行（rustup-init を入手して実行）:
+1. Open PowerShell and run this (fetches and runs rustup-init):
 
    ```powershell
    winget install --id Rustlang.Rustup -e
    ```
 
-   または公式インストーラを直接:
+   Or use the official installer directly:
    <https://www.rust-lang.org/tools/install>
 
-2. ターミナルを開き直してから動作確認:
+2. Reopen your terminal and check it works:
 
    ```bash
    rustc --version
    cargo --version
    ```
 
-3. **MSVC ビルドツール**（C++ Build Tools）も必要。
-   未インストールの場合は Visual Studio Installer から
-   「C++ によるデスクトップ開発」のワークロードを追加するか、
-   下記コマンドで Build Tools 単体を入れる:
+3. The **MSVC build tools** (C++ Build Tools) are required too.
+   If they are missing, add the "Desktop development with C++" workload from the
+   Visual Studio Installer, or install the Build Tools on their own with:
 
    ```powershell
    winget install --id Microsoft.VisualStudio.2022.BuildTools -e
    ```
 
-## 開発・ビルド
+## Development and builds
 
 ```bash
 cd desktop
 npm install
-npm run dev      # 開発起動（ホットリロードなし、フロントは静的）
-npm run build    # NSIS インストーラを作成
+npm run dev      # run in development (no hot reload; the front end is static)
+npm run build    # produce the NSIS installer
 ```
 
-ビルド成果物:
+Build output:
 `desktop/src-tauri/target/release/bundle/nsis/JSON Diver_<version>_x64-setup.exe`
 
-## `.json` の関連付け
+## Associating `.json`
 
-1. 上記の NSIS インストーラを実行してインストール
-2. 任意の `.json` を右クリック →「プログラムから開く」→「JSON Diver」
-3. 「常にこのアプリで開く」をチェックすれば既定アプリになる
+1. Run the NSIS installer above to install the app
+2. Right-click any `.json` → "Open with" → "JSON Diver"
+3. Tick "Always use this app" to make it the default
 
-## 動作
+## Behavior
 
-- 起動時の `argv` から `.json` を 1 つ拾って読み込む
-- 編集後 **Ctrl+S** で元ファイルに上書き保存（UTF-8 / BOM なし）
-- 引数なしで起動した場合は **Save ボタン** または Ctrl+S で保存先を選択
-- 起動中のアプリで別の `.json` をダブルクリック → 同一プロセス内に **新しいウィンドウ** が開いてそのファイルを表示
-  （`tauri-plugin-single-instance` で 2 重起動を集約しつつ、ウィンドウは複数開ける）
-- **New Window ボタン** または **Ctrl+N** で空の新規ウィンドウを開ける
+- On startup, one `.json` is picked up from `argv` and loaded
+- After editing, **Ctrl+S** overwrites the original file (UTF-8, no BOM)
+- When started without arguments, the **Save button** or Ctrl+S opens a
+  destination picker
+- Double-clicking another `.json` while the app is running opens a **new window**
+  in the same process showing that file
+  (`tauri-plugin-single-instance` collapses second launches while still allowing
+  multiple windows)
+- The **New Window** button or **Ctrl+N** opens an empty new window
 
-## ファイル構成
+## Files
 
 ```
 desktop/
@@ -72,20 +75,21 @@ desktop/
     ├── build.rs
     ├── tauri.conf.json
     ├── capabilities/default.json
-    ├── icons/                  # favicon.svg から生成済み
+    ├── icons/                  # generated from favicon.svg
     └── src/main.rs
 ```
 
-ブラウザ単独で `../dev/index.html` を開いても従来通り動作する
-（`desktop.js` は `window.__TAURI__` が無ければ no-op）。
+Opening `../dev/index.html` in a plain browser still works as before
+(`desktop.js` is a no-op without `window.__TAURI__`).
 
-## アイコンの再生成
+## Regenerating the icons
 
-`dev/favicon.svg` を更新したら:
+After updating `dev/favicon.svg`:
 
 ```bash
 cd desktop
 npm run icon
 ```
 
-これで `src-tauri/icons/` 一式が再生成される（要 Tauri CLI インストール済み）。
+That regenerates the whole `src-tauri/icons/` set (requires the Tauri CLI to be
+installed).

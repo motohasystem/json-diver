@@ -1,46 +1,50 @@
 # JSON Diver
 
-JSON を階層ツリーで素早く読み・編集できるビューア／エディタです。
-大きな JSON でも深い階層をたどりやすく、整形・スキーマ検証・ミニマップなどを備えています。
+A viewer/editor for reading and editing JSON as a collapsible tree.
+Deep structures stay easy to follow even in large documents, with pretty printing,
+schema validation and a minimap built in.
 
-JSON Diver には **2 つの版** があります。
+JSON Diver comes in **two editions**.
 
-## 🌐 ブラウザ版
+## 🌐 Browser edition
 
-インストール不要。ブラウザですぐ使えます。
+No installation — just open it in a browser.
 
 **▶ https://json.kintoys.app**
 
-## 🖥️ ネイティブ版（Windows デスクトップ）
+## 🖥️ Native edition (Windows desktop)
 
-`.json` ファイルをダブルクリックで開ける、Tauri 2 製の Windows アプリです。
+A Windows app built with Tauri 2 that opens `.json` files on double-click.
 
-**▶ [最新版インストーラをダウンロード（Releases）](https://github.com/motohasystem/json-diver/releases/latest)**
+**▶ [Download the latest installer (Releases)](https://github.com/motohasystem/json-diver/releases/latest)**
 
-`JSON Diver_<version>_x64-setup.exe` を実行してインストールしてください
-（管理者権限不要 / current-user インストール）。
+Run `JSON Diver_<version>_x64-setup.exe` to install
+(no administrator rights required / current-user install).
 
-ネイティブ版ならではの機能:
+What the native edition adds:
 
-- `.json` をダブルクリックで起動・読み込み（OS のファイル関連付け対応）
-- 編集後 **Ctrl+S** で元ファイルへ上書き保存（UTF-8 / BOM なし）
-- 別の `.json` をダブルクリック → **新しいウィンドウ** で開く（複数ウィンドウ対応）
-- **New Window ボタン / Ctrl+N** で空の新規ウィンドウを開く
+- Launch and load by double-clicking a `.json` file (OS file association)
+- Save back over the original file with **Ctrl+S** (UTF-8, no BOM)
+- Double-click another `.json` → it opens in a **new window** (multi-window support)
+- Open an empty window with the **New Window button / Ctrl+N**
 
-## 主な機能（共通）
+📖 For detailed instructions, see the [usage guide (docs/usage.md)](docs/usage.md).
 
-- JSON を階層ツリーで表示し、深さごとに開閉
-- View / Edit / Raw モード（生 JSON の直接編集）
-- 整形（Format）・圧縮
-- 値のインライン編集・コピー・ダウンロード
-- JSON Schema による検証
-- ミニマップでの俯瞰・ジャンプ
+## Main features (both editions)
 
-## リポジトリ構成
+- Renders JSON as a collapsible tree, expandable by depth
+- View / Edit / Raw modes (Raw edits the JSON text directly)
+- **Pretty** toggle (on by default): 2-space pretty print ⇄ one-line minify, applied
+  across the Raw view, pastes, and Copy/Download alike
+- Inline value editing, copy, download
+- Validation against a JSON Schema
+- Minimap for an overview and quick jumps
 
-| パス | 内容 |
+## Repository layout
+
+| Path | Contents |
 | --- | --- |
-| [`dev/`](dev/) | フロントエンド本体（ブラウザ版・ネイティブ版で共有） |
-| [`desktop/`](desktop/) | Windows ネイティブ版（Tauri 2）。ビルド手順は [`desktop/README.md`](desktop/README.md) |
+| [`dev/`](dev/) | The front end itself (shared by the browser and native editions) |
+| [`desktop/`](desktop/) | Windows native edition (Tauri 2). Build steps: [`desktop/README.md`](desktop/README.md) |
 
-ネイティブ版のビルド方法は [`desktop/README.md`](desktop/README.md) を参照してください。
+See [`desktop/README.md`](desktop/README.md) for how to build the native edition.

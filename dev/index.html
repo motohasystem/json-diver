@@ -26,13 +26,13 @@
         <div class="data-actions">
           <button id="btn-sample" type="button">Sample</button>
           <button id="btn-paste" type="button">Paste</button>
-          <button id="btn-format" type="button" disabled>Format</button>
+          <button id="btn-autoformat" type="button" aria-pressed="true" title="Pretty print">Pretty</button>
           <button id="btn-copy" type="button" disabled>Copy</button>
           <button id="btn-download" type="button" disabled>Download</button>
           <button id="btn-clear" type="button">Clear</button>
         </div>
         <div class="mode-actions">
-          <div id="mode-switch" class="mode-switch" data-mode="view" role="group" aria-label="モード切替">
+          <div id="mode-switch" class="mode-switch" data-mode="view" role="group" aria-label="Mode">
             <div class="mode-thumb" aria-hidden="true"></div>
             <button class="mode-opt" data-mode="view" type="button">View</button>
             <button class="mode-opt" data-mode="edit" type="button">Edit</button>
@@ -40,18 +40,18 @@
           </div>
           <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
           <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
-          <button id="violation-badge" type="button" class="violation-badge" hidden title="スキーマ違反"></button>
+          <button id="violation-badge" type="button" class="violation-badge" hidden title="Schema violations"></button>
         </div>
       </div>
       <div id="error" class="error" hidden></div>
-      <div id="depth-bar" class="depth-bar" aria-label="階層別の開閉"></div>
+      <div id="depth-bar" class="depth-bar" aria-label="Expand / collapse by depth"></div>
       <div class="tree-scroll">
         <section id="tree" class="tree" aria-label="JSON tree"></section>
       </div>
     </div>
     <aside class="sidebar" aria-label="Reference">
       <div class="legend">
-        <div class="legend-title">型アイコン</div>
+        <div class="legend-title">Types</div>
         <ul class="legend-list">
           <li><span class="icon t-object">{}</span><span class="legend-name">object</span><span class="legend-ex">{}, {3}</span></li>
           <li><span class="icon t-array">[]</span><span class="legend-name">array</span><span class="legend-ex">[], [3]</span></li>
@@ -63,19 +63,19 @@
         </ul>
       </div>
       <div class="schema-panel">
-        <div class="schema-title">スキーマ <span class="schema-status" id="schema-status"></span></div>
+        <div class="schema-title">Schema <span class="schema-status" id="schema-status"></span></div>
         <textarea id="schema-input" placeholder='{ "type": "object", "properties": {...} }' spellcheck="false"></textarea>
         <div id="schema-error" class="schema-error" hidden></div>
       </div>
       <div class="minimap-wrap">
-        <div class="minimap-title">ミニマップ</div>
+        <div class="minimap-title">Minimap</div>
         <div class="minimap" id="minimap">
           <canvas id="minimap-canvas"></canvas>
           <div class="minimap-viewport" id="minimap-viewport"></div>
         </div>
       </div>
       <div class="app-info">
-        <div class="app-info-ver">JSON Diver <span id="app-version">v0.3.1</span></div>
+        <div class="app-info-ver">JSON Diver <span id="app-version">v0.4.0</span></div>
         <a class="app-link" href="https://json.kintoys.app" target="_blank" rel="noopener" data-external>json.kintoys.app</a>
         <a class="app-link" href="https://github.com/motohasystem/json-diver" target="_blank" rel="noopener" data-external>GitHub</a>
       </div>
@@ -86,7 +86,7 @@
 <div id="tooltip" class="tooltip" hidden></div>
 <div id="modal-stack" class="modal-stack" aria-hidden="true"></div>
 <div id="toast" class="toast" hidden role="status"></div>
-<div id="drop-overlay" aria-hidden="true"><div class="drop-overlay-label">JSON／ファイルをドロップ</div></div>
+<div id="drop-overlay" aria-hidden="true"><div class="drop-overlay-label">Drop JSON or a file</div></div>
 
 <script src="app.js"></script>
 <script src="desktop.js"></script>
