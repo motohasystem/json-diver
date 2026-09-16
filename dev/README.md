@@ -35,6 +35,17 @@ Just open `index.html` in a browser.
   as JSON; a fragment pasted mid-document falls through to the native paste
 - The preference is stored in `localStorage` (`json-diver:autoFormat`)
 
+### Clipboard watch (Watch toggle)
+- Off by default; the preference is stored in `localStorage` (`json-diver:watchClipboard`)
+- Browser: the `clipboardchange` event (Chromium 144+) with a `focus` /
+  `visibilitychange` fallback, both gated on the `clipboard-read` permission. Reads are
+  skipped unless `document.hasFocus()`, since `readText()` rejects without focus
+- Desktop: `desktop.js` forwards the toggle to the Tauri shell, which watches the
+  Windows clipboard natively and emits `clipboard-text`; no focus needed
+- Both paths land in `handleClipboardText()`, which ignores non-JSON, scalars,
+  already-seen text and anything this app copied itself, then loads via
+  `History.pushBefore()` so Ctrl+Z undoes it
+
 ### Escaped JSON (🪆)
 - When a value is a JSON string (starts with `{` / `[` and parses), it is detected
   automatically and marked with the 🪆 icon

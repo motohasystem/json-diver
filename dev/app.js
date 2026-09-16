@@ -27,6 +27,7 @@
   const $btnCopy = document.getElementById("btn-copy");
   const $btnPaste = document.getElementById("btn-paste");
   const $btnAutoFormat = document.getElementById("btn-autoformat");
+  const $btnWatch = document.getElementById("btn-watch");
   const $modeSwitch = document.getElementById("mode-switch");
   const $btnUndo = document.getElementById("btn-undo");
   const $btnRedo = document.getElementById("btn-redo");
@@ -55,6 +56,7 @@
     schema: null,     // current parsed schema (added in MVP-3)
     mode: "view",     // "view" | "edit" | "raw" (was editMode boolean)
     autoFormat: true, // true: 2-space pretty JSON, false: minified (1 line)
+    watchClipboard: false, // auto-load JSON as soon as it lands on the clipboard
     violations: [],   // current schema violations (added in MVP-3)
   };
 
@@ -750,6 +752,7 @@
       }
       const text = typeof value === "string" ? value : serializeDoc(value);
       try {
+        Clip.lastCopied = text;
         await navigator.clipboard.writeText(text);
         showToast("Copied to clipboard", 1500, "ok");
         btn.classList.remove("copied");
@@ -1419,6 +1422,146 @@
     editor.selectionStart = editor.selectionEnd = normalized.length;
   }
 
+  // ---------- Clipboard watch ----------
+
+  // With the watch on, JSON that lands on the clipboard is loaded on its own.
+  // Two very different mechanisms feed the same handler:
+  //   browser  … the `clipboardchange` event (Chromium 144+) plus a focus fallback.
+  //              Both are focus-bound: a copy made in another app is only seen once
+  //              this page has system focus again.
+  //   desktop  … a Win32 clipboard watcher in the Tauri shell (see desktop.js), which
+  //              needs no focus at all and calls handleClipboardText() directly.
+  const STORAGE_KEY_WATCH = "json-diver:watchClipboard";
+  const isTauri = !!window.__TAURI__;
+
+  const Clip = {
+    installed: false, // web listeners attached
+    lastSeen: "",     // clipboard text already handled (or rejected)
+    lastCopied: "",   // text this app itself put on the clipboard
+  };
+
+  // Load `text` if it is a JSON object/array we have not already handled.
+  // Returns true when the document was replaced.
+  function handleClipboardText(text) {
+    if (!state.watchClipboard || typeof text !== "string") return false;
+    if (text === Clip.lastSeen || text === Clip.lastCopied) return false;
+    Clip.lastSeen = text;
+    const trimmed = text.trim();
+    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return false;
+    let value;
+    try { value = JSON.parse(trimmed); }
+    catch (_) { return false; }
+    if (value === null || typeof value !== "object") return false;
+    const next = serializeDoc(value);
+    if (next === $input.value) return false; // already on screen
+    History.pushBefore();
+    $input.value = next;
+    parseAndRender(next, { preserveHistory: true });
+    if (state.mode === "raw") refreshAllPanes();
+    showToast("Loaded from clipboard — Ctrl+Z to undo", 2500, "ok");
+    return true;
+  }
+
+  async function clipboardPermission() {
+    if (!navigator.permissions || !navigator.clipboard || !navigator.clipboard.readText) {
+      return "unsupported";
+    }
+    try {
+      const status = await navigator.permissions.query({ name: "clipboard-read" });
+      return status.state; // granted | prompt | denied
+    } catch (_) {
+      return "unsupported"; // Firefox / Safari: no clipboard-read permission at all
+    }
+  }
+
+  // Reading needs system focus; without it readText() rejects, so skip quietly.
+  async function pollClipboard() {
+    if (!state.watchClipboard || !document.hasFocus()) return;
+    let text;
+    try { text = await navigator.clipboard.readText(); }
+    catch (_) { return; }
+    handleClipboardText(text);
+  }
+
+  function installWebWatcher() {
+    if (Clip.installed) return;
+    Clip.installed = true;
+    const cb = navigator.clipboard;
+    // Chromium 144+: fires on every change while focused, and once on refocus for
+    // anything copied while this page was in the background.
+    if (cb && "onclipboardchange" in cb) {
+      cb.addEventListener("clipboardchange", pollClipboard);
+    }
+    // Fallback (and belt-and-braces): re-check whenever the page regains focus.
+    window.addEventListener("focus", pollClipboard);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) pollClipboard();
+    });
+  }
+
+  function setWatchClipboard(on) {
+    state.watchClipboard = !!on;
+    $btnWatch.classList.toggle("active", state.watchClipboard);
+    $btnWatch.setAttribute("aria-pressed", String(state.watchClipboard));
+    $btnWatch.title = state.watchClipboard
+      ? (isTauri
+          ? "Clipboard watch ON — JSON copied anywhere is loaded automatically"
+          : "Clipboard watch ON — JSON copied elsewhere loads when you return to this tab")
+      : "Clipboard watch OFF — click to load JSON automatically when it is copied";
+    try { localStorage.setItem(STORAGE_KEY_WATCH, state.watchClipboard ? "1" : "0"); }
+    catch (_) { /* storage unavailable */ }
+    // The desktop shell starts/stops its native watcher from this.
+    document.dispatchEvent(new CustomEvent("jd:clipboard-watch", {
+      detail: { on: state.watchClipboard },
+    }));
+  }
+
+  // Turning it on from a click: that gesture is what lets Chromium show the
+  // clipboard-read prompt. The current clipboard is only primed, never loaded.
+  async function enableWatch() {
+    if (isTauri) return true; // the native watcher needs no permission
+    const perm = await clipboardPermission();
+    if (perm === "unsupported") {
+      showToast("This browser cannot watch the clipboard (Chrome or Edge required)", 4000);
+      return false;
+    }
+    try {
+      Clip.lastSeen = await navigator.clipboard.readText();
+    } catch (_) {
+      showToast("Clipboard permission denied", 3000);
+      return false;
+    }
+    installWebWatcher();
+    return true;
+  }
+
+  $btnWatch.addEventListener("click", async () => {
+    if (state.watchClipboard) {
+      setWatchClipboard(false);
+      showToast("Clipboard watch off", 1500, "ok");
+      return;
+    }
+    if (!(await enableWatch())) return;
+    setWatchClipboard(true);
+    showToast(isTauri
+      ? "Watching the clipboard"
+      : "Watching the clipboard while this tab is focused", 2000, "ok");
+  });
+
+  // Restore the watch across sessions. In the browser that is only possible when the
+  // permission is already granted — otherwise it needs a fresh click.
+  async function restoreWatch() {
+    let stored = false;
+    try { stored = localStorage.getItem(STORAGE_KEY_WATCH) === "1"; }
+    catch (_) { /* storage unavailable */ }
+    if (!stored) { setWatchClipboard(false); return; }
+    if (isTauri) { setWatchClipboard(true); return; }
+    if ((await clipboardPermission()) !== "granted") { setWatchClipboard(false); return; }
+    try { Clip.lastSeen = await navigator.clipboard.readText(); } catch (_) { /* not focused */ }
+    installWebWatcher();
+    setWatchClipboard(true);
+  }
+
   function pad2(n) { return String(n).padStart(2, "0"); }
   function downloadFilename() {
     const d = new Date();
@@ -1502,6 +1645,7 @@
     const text = $input.value;
     if (!text.trim()) return;
     try {
+      Clip.lastCopied = text;
       await navigator.clipboard.writeText(text);
       showToast("Copied to clipboard", 1500, "ok");
     } catch (err) {
@@ -2348,9 +2492,14 @@
   // No document → start in Raw mode (the only input surface) with View/Edit off.
   refreshEmptyState();
 
+  restoreWatch();
+
   window.JsonDiver = {
     loadText(text) { $input.value = text; parseAndRender(text); },
     getText() { return $input.value; },
     setTitleSuffix(s) { document.title = s ? `${s} — JSON Diver` : "JSON Diver"; },
+    // Used by the desktop shell's native clipboard watcher.
+    handleClipboardText,
+    isWatchingClipboard() { return state.watchClipboard; },
   };
 })();

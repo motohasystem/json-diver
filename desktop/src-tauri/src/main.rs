@@ -2,11 +2,14 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
+
+/// Shared on/off switch for the clipboard watcher thread.
+struct ClipboardWatch(Arc<AtomicBool>);
 
 #[derive(Default)]
 struct AppState {
@@ -100,6 +103,63 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
     std::fs::write(p, contents).map_err(|e| format!("write failed: {e}"))
 }
 
+/// Turn the clipboard watcher on or off. The thread itself always runs; this only
+/// decides whether it looks at anything.
+#[tauri::command]
+fn set_clipboard_watch(enabled: bool, watch: State<'_, ClipboardWatch>) {
+    watch.0.store(enabled, Ordering::Relaxed);
+}
+
+/// Watch the Windows clipboard and emit every JSON-looking change to the webview.
+///
+/// `GetClipboardSequenceNumber` (via `clipboard_win::raw::seq_num`) is the cheap part:
+/// it reports changes WITHOUT opening the clipboard, so the poll never takes the global
+/// clipboard lock other apps need while copying. The clipboard is only actually read
+/// after the number moves.
+#[cfg(windows)]
+fn spawn_clipboard_watcher(app: AppHandle, active: Arc<AtomicBool>) {
+    use tauri::Emitter;
+
+    std::thread::spawn(move || {
+        let current_seq = || clipboard_win::raw::seq_num().map(|n| n.get()).unwrap_or(0);
+        let mut last_seq = current_seq();
+        let mut was_active = false;
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            if !active.load(Ordering::Relaxed) {
+                was_active = false;
+                continue;
+            }
+            let seq = current_seq();
+            if !was_active {
+                // Just switched on: adopt whatever is there now without loading it.
+                last_seq = seq;
+                was_active = true;
+                continue;
+            }
+            if seq == last_seq {
+                continue;
+            }
+            last_seq = seq;
+
+            let text = match clipboard_win::get_clipboard_string() {
+                Ok(t) => t,
+                Err(_) => continue, // not text, or another app holds the clipboard
+            };
+            let head = text.trim_start();
+            if !(head.starts_with('{') || head.starts_with('[')) {
+                continue;
+            }
+            // The frontend does the real parse and decides whether to load it.
+            let _ = app.emit("clipboard-text", text);
+        }
+    });
+}
+
+#[cfg(not(windows))]
+fn spawn_clipboard_watcher(_app: AppHandle, _active: Arc<AtomicBool>) {}
+
 #[tauri::command]
 fn save_as_dialog(app: AppHandle) -> Option<String> {
     let result = app
@@ -121,6 +181,10 @@ fn main() {
         }))
         .manage(AppState::default())
         .setup(|app| {
+            let active = Arc::new(AtomicBool::new(false));
+            app.manage(ClipboardWatch(active.clone()));
+            spawn_clipboard_watcher(app.handle().clone(), active);
+
             let args: Vec<String> = std::env::args().collect();
             if let Some(p) = pick_json_file_from_args(&args) {
                 // The statically-configured startup window has label "main".
@@ -138,6 +202,7 @@ fn main() {
             read_text_file,
             write_text_file,
             save_as_dialog,
+            set_clipboard_watch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running JSON Diver");

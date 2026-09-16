@@ -117,11 +117,30 @@
     });
   }
 
+  function bindClipboardWatch() {
+    // The Rust side watches the Windows clipboard with no focus requirement and
+    // emits every JSON-looking change; app.js decides whether to load it.
+    listen("clipboard-text", (e) => {
+      if (typeof e.payload === "string") window.JsonDiver.handleClipboardText(e.payload);
+    });
+    // Start/stop the native watcher when the Watch button is toggled.
+    document.addEventListener("jd:clipboard-watch", (e) => {
+      const on = !!(e.detail && e.detail.on);
+      invoke("set_clipboard_watch", { enabled: on }).catch((err) => {
+        console.error("clipboard watch failed:", err);
+      });
+    });
+    // app.js restores the toggle before this listener exists, so sync once here.
+    invoke("set_clipboard_watch", { enabled: !!window.JsonDiver.isWatchingClipboard() })
+      .catch(() => {});
+  }
+
   function start() {
     ensureSaveButton();
     ensureNewWindowButton();
     bindExternalLinks();
     bindNativeFileDrop();
+    bindClipboardWatch();
     bindShortcuts();
     // The topbar is hidden via `html.tauri` (added above), but app.js already ran its
     // initial height fit while the topbar was still visible — leaving an empty gap at the

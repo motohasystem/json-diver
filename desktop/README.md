@@ -79,6 +79,12 @@ push your changes before building, and never edit it directly.
   (`tauri-plugin-single-instance` collapses second launches while still allowing
   multiple windows)
 - The **New Window** button or **Ctrl+N** opens an empty new window
+- With the **Watch** toggle on, the clipboard is watched natively: a background thread
+  polls `GetClipboardSequenceNumber` (via `clipboard_win::raw::seq_num`), which reports
+  changes *without* opening the clipboard, so the poll never takes the global clipboard
+  lock that other apps need while copying. The clipboard is only read once the number
+  moves, and JSON-looking text is emitted to the webview as `clipboard-text`. Unlike the
+  browser edition this needs no window focus
 
 ## Files
 

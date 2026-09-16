@@ -1,6 +1,6 @@
 [package]
 name = "json-diver"
-version = "0.4.0"
+version = "0.5.0"
 description = "JSON Diver desktop"
 edition = "2021"
 rust-version = "1.77"
@@ -13,6 +13,10 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
+
+# Clipboard watch (Windows only): sequence number + text read.
+[target.'cfg(windows)'.dependencies]
+clipboard-win = "5"
 
 [profile.release]
 panic = "abort"

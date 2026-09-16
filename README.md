@@ -36,6 +36,8 @@ What the native edition adds:
 - View / Edit / Raw modes (Raw edits the JSON text directly)
 - **Pretty** toggle (on by default): 2-space pretty print ⇄ one-line minify, applied
   across the Raw view, pastes, and Copy/Download alike
+- **Watch** toggle: JSON copied to the clipboard is loaded automatically (instantly in
+  the native edition; on returning to the tab in Chrome/Edge)
 - Inline value editing, copy, download
 - Validation against a JSON Schema
 - Minimap for an overview and quick jumps

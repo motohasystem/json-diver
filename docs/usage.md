@@ -24,6 +24,9 @@ and [`desktop/README.md`](../desktop/README.md).
    Pasted and dropped JSON is pretty printed with 2-space indentation by
    **Pretty** (on by default). Turn **Pretty** off in the toolbar to keep
    everything minified to one line instead.
+
+   Turning on **Watch** removes the paste step entirely: copy JSON anywhere and it
+   loads on its own. See [Clipboard watch](#clipboard-watch).
 3. The tree appears fully expanded — collapse, browse and edit from there
 
 Whatever you load is saved to the browser (`localStorage`) automatically and
@@ -33,7 +36,8 @@ restored the next time you open the app.
 
 ```
 ┌───────────────────────────────────────────────┬────────────────┐
-│ [Sample][Paste][Pretty][Copy][Download][Clear]│  Types         │
+│ [Sample][Paste][Watch][Pretty]                │  Types         │
+│ [Copy][Download][Clear]                       │                │
 │                [View|Edit|Raw] [Undo][Redo]   │                │
 │ ─ depth bar (expand / collapse by depth) ─────│  Schema        │
 │                                               │                │
@@ -96,12 +100,39 @@ Switch between **View / Edit / Raw** with the switch on the right of the toolbar
 | --- | --- |
 | **Sample** | Load demo JSON (includes escaped JSON and a large array) |
 | **Paste** | Load the contents of the clipboard |
+| **Watch** | Clipboard watch (highlighted = on; off by default). While on, JSON copied anywhere is loaded automatically — see [Clipboard watch](#clipboard-watch) for what each edition can do |
 | **Pretty** | Toggle that decides the JSON text form (highlighted = on; on by default, stored in the browser). ON = 2-space pretty print, OFF = minified to one line. It applies to the Raw view, pastes/drops, Copy and Download alike, and flipping it re-formats the current document immediately |
 | **Copy** | Copy the whole JSON to the clipboard |
 | **Download** | Download as `json-diver-YYYYMMDD-HHMMSS.json` |
 | **Clear** | Clear the data and the stored copy (asks for confirmation; Undo restores it) |
 | **↶ Undo / Redo ↷** | Undo and redo edits |
 | **⚠ N** | Schema violation badge (shown only when there are violations). Click to jump to the first one |
+
+## Clipboard watch
+
+With the **Watch** button on, JSON that lands on the clipboard is loaded on its own —
+no Ctrl+V, no Paste button. What that means differs by edition, because the browser
+and the desktop app have fundamentally different clipboard access.
+
+| | Browser edition | Desktop edition |
+| --- | --- | --- |
+| When it notices | As soon as this tab has focus. JSON copied while you were in another app loads the moment you switch back to the tab | Immediately, even while you are working in another app |
+| Requirements | Chrome or Edge 144+, and the clipboard-read permission (asked for once, when you first turn Watch on) | None |
+| Firefox / Safari | Not possible — neither browser lets a page read the clipboard without a fresh user gesture. The button reports this and stays off | — |
+
+Either way the rules for what gets loaded are the same:
+
+- Only text that parses as a JSON **object or array** is loaded; plain text, numbers
+  and strings on the clipboard are ignored
+- The same clipboard contents are never loaded twice
+- JSON that **JSON Diver itself** copied (Copy button, or 📋 on a row) is ignored, so
+  copying a subtree does not reload the document
+- Loading replaces what is on screen and is pushed to the edit history, so **Ctrl+Z**
+  brings the previous document straight back
+- Turning Watch on does not load whatever is already on the clipboard — it starts from
+  the next copy
+- The setting is remembered. In the browser it comes back automatically only while the
+  clipboard permission is still granted; otherwise press Watch again
 
 ## Depth bar (expand / collapse by depth)
 
@@ -213,4 +244,4 @@ The desktop edition is the same screen as the browser edition plus file handling
 
 ---
 
-*This document describes the features as of v0.4.0.*
+*This document describes the features as of v0.5.0.*
