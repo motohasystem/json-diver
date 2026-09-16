@@ -7,6 +7,7 @@ Everything Partner Center asks for, ready to paste or upload.
 | `listing-ja.md` | ストア登録情報 (ja) — 説明 / アプリの機能 / 検索キーワード |
 | `listing-en.md` | Store listing (en-US) — description / app features / search terms |
 | `certification-notes.md` | 認定のメモ (Notes for certification) |
+| `restricted-capability-runfulltrust.md` | 制限付き機能 (runFullTrust) の使用承認の申請理由 |
 | `logo-300.png` | ストア ロゴ 300×300 |
 | `screenshots/*.png` | スクリーンショット (PC) — 1366×768 |
 
@@ -44,5 +45,9 @@ node shots.mjs   # see the session scratchpad, or re-run the same Playwright ste
 
 - Package identity must match Partner Center exactly — see `desktop/README.md`,
   section "Package identity". The values live in `%USERPROFILE%\.json-diver-msix.json`.
-- `runFullTrust` is a restricted capability: the justification is already written out
-  in `certification-notes.md`, ready to paste.
+- `runFullTrust` is a restricted capability. Partner Center asks for a written
+  justification before it will accept the submission; paste
+  `restricted-capability-runfulltrust.md`. A shorter summary is also included in
+  `certification-notes.md`.
+- Privacy policy URL: <https://json.kintoys.app/privacy> (no `.html` — that path
+  redirects). The page itself lives at `dev/privacy.html` and deploys with the site.
