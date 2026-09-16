@@ -62,6 +62,10 @@ The build directory defaults to `%USERPROFILE%\work\json-diver`. That clone is a
 build-only copy — it is hard-reset to `origin/main` on every run, so commit and
 push your changes before building, and never edit it directly.
 
+Both build scripts re-run themselves in a child `cmd`, so the window always waits for
+a keypress before closing — including when a batch syntax error kills the inner run
+before it can reach its own exit path.
+
 ## Associating `.json`
 
 1. Run the NSIS installer above to install the app

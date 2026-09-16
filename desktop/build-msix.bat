@@ -1,4 +1,19 @@
 @echo off
+REM Always keep the window open: the real script runs in a child cmd, so this
+REM outer pass still pauses even when a syntax error kills the inner run before
+REM it can reach its own exit path. No parentheses here on purpose - %ERRORLEVEL%
+REM inside a block would expand when the block is parsed, not when it runs.
+if "%JD_RUN%"=="1" goto :run
+set "JD_RUN=1"
+cmd /c ""%~f0" %*"
+set "JD_RC=%ERRORLEVEL%"
+set "JD_RUN="
+echo.
+pause
+exit /b %JD_RC%
+
+:run
+set "JD_RUN="
 REM ============================================================
 REM  JSON Diver - build the MSIX package (Microsoft Store)
 REM
@@ -141,7 +156,6 @@ echo The package is UNSIGNED - that is what Partner Center expects.
 echo To install it locally instead, sign it first with a certificate whose
 echo subject matches Publisher exactly (%MSIX_PUBLISHER%).
 start "" explorer "%OUTDIR%"
-pause
 exit /b 0
 
 :asset
@@ -172,5 +186,4 @@ exit /b 0
 :fail
 echo.
 echo *** MSIX BUILD FAILED ***
-pause
 exit /b 1

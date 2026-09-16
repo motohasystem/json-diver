@@ -1,4 +1,19 @@
 @echo off
+REM Always keep the window open: the real script runs in a child cmd, so this
+REM outer pass still pauses even when a syntax error kills the inner run before
+REM it can reach its own exit path. No parentheses here on purpose - %ERRORLEVEL%
+REM inside a block would expand when the block is parsed, not when it runs.
+if "%JD_RUN%"=="1" goto :run
+set "JD_RUN=1"
+cmd /c ""%~f0" %*"
+set "JD_RC=%ERRORLEVEL%"
+set "JD_RUN="
+echo.
+pause
+exit /b %JD_RC%
+
+:run
+set "JD_RUN="
 REM ============================================================
 REM  JSON Diver - build the Windows installer (Tauri 2 / NSIS)
 REM
@@ -63,7 +78,6 @@ dir /b "%NSIS_DIR%\*.exe"
 echo.
 echo Installer folder: %NSIS_DIR%
 start "" explorer "%NSIS_DIR%"
-pause
 exit /b 0
 
 :need
@@ -78,5 +92,4 @@ exit /b 0
 :fail
 echo.
 echo *** BUILD FAILED ***
-pause
 exit /b 1
