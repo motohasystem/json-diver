@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Package identity for the MSIX build. For a Store submission these must match",
+    "Partner Center (Product > Product identity) EXACTLY.",
+    "identityName         = Package/Identity/Name",
+    "publisher            = Package/Identity/Publisher (CN=...)",
+    "publisherDisplayName = Package/Properties/PublisherDisplayName",
+    "",
+    "The values below are TEST values; the Store rejects them.",
+    "Keep your real values outside the repository (the build clone is reset to",
+    "origin/main every run) at: %USERPROFILE%\\.json-diver-msix.json",
+    "This file must be UTF-8 so non-ASCII publisher names survive."
+  ],
+  "identityName": "JSONDiver",
+  "publisher": "CN=JSON Diver Test",
+  "publisherDisplayName": "JSON Diver"
+}

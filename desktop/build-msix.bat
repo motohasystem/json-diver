@@ -79,18 +79,10 @@ echo.
 
 cd /d "%BUILD_DIR%\desktop" || goto :fail
 
-REM ---- package identity ----
-if exist "%USERPROFILE%\.json-diver-msix.cmd" (
-    echo --- identity from %USERPROFILE%\.json-diver-msix.cmd ---
-    call "%USERPROFILE%\.json-diver-msix.cmd"
-) else (
-    echo --- identity from msix\identity.cmd - TEST VALUES ---
-    call "%BUILD_DIR%\desktop\msix\identity.cmd"
-)
-if not defined MSIX_IDENTITY_NAME goto :fail
-echo   Name      : %MSIX_IDENTITY_NAME%
-echo   Publisher : %MSIX_PUBLISHER%
-echo   Display   : %MSIX_PUBLISHER_DISPLAY%
+REM ---- package identity (UTF-8 JSON, read by PowerShell - see identity.json) ----
+set "IDJSON=%BUILD_DIR%\desktop\msix\identity.json"
+if exist "%USERPROFILE%\.json-diver-msix.json" set "IDJSON=%USERPROFILE%\.json-diver-msix.json"
+echo --- identity from %IDJSON% ---
 echo.
 
 REM ---- version: package.json "0.5.0" -> MSIX "0.5.0.0" (Store needs revision 0) ----
@@ -138,7 +130,10 @@ for %%A in (Square30x30Logo.png Square71x71Logo.png Square89x89Logo.png Square10
 REM ---- fill the manifest template ----
 echo --- writing AppxManifest.xml ---
 set "TPL=%BUILD_DIR%\desktop\msix\AppxManifest.xml"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$t = [IO.File]::ReadAllText($env:TPL); $t = $t.Replace('__IDENTITY_NAME__', $env:MSIX_IDENTITY_NAME).Replace('__PUBLISHER__', $env:MSIX_PUBLISHER).Replace('__PUBLISHER_DISPLAY_NAME__', $env:MSIX_PUBLISHER_DISPLAY).Replace('__VERSION__', $env:MSIX_VERSION); [IO.File]::WriteAllText($env:STAGE + '\AppxManifest.xml', $t, (New-Object Text.UTF8Encoding $false))" || goto :fail
+REM Identity is read and written by PowerShell end to end, so a non-ASCII publisher
+REM name never passes through the console code page. The values are echoed back from
+REM the file that was actually used - check them before uploading.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$id = ConvertFrom-Json (Get-Content -Raw -Encoding UTF8 $env:IDJSON); foreach ($k in 'identityName','publisher','publisherDisplayName') { if (-not $id.$k) { Write-Host ('  [ERROR] missing in identity file: ' + $k); exit 1 }; if ($id.$k -match 'PASTE_FROM_PARTNER_CENTER') { Write-Host ('  [ERROR] still a placeholder: ' + $k); exit 1 } }; $t = [IO.File]::ReadAllText($env:TPL); $t = $t.Replace('__IDENTITY_NAME__', $id.identityName).Replace('__PUBLISHER__', $id.publisher).Replace('__PUBLISHER_DISPLAY_NAME__', $id.publisherDisplayName).Replace('__VERSION__', $env:MSIX_VERSION); [IO.File]::WriteAllText($env:STAGE + '\AppxManifest.xml', $t, (New-Object Text.UTF8Encoding $false)); Write-Host ('  Name      : ' + $id.identityName); Write-Host ('  Publisher : ' + $id.publisher); Write-Host ('  Display   : ' + $id.publisherDisplayName)" || goto :fail
 
 REM ---- pack ----
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
@@ -153,8 +148,8 @@ echo ============================================
 echo %MSIX_OUT%
 echo.
 echo The package is UNSIGNED - that is what Partner Center expects.
-echo To install it locally instead, sign it first with a certificate whose
-echo subject matches Publisher exactly (%MSIX_PUBLISHER%).
+echo Check the Name / Publisher / Display values printed above against
+echo Partner Center before uploading.
 start "" explorer "%OUTDIR%"
 exit /b 0
 

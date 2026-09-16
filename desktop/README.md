@@ -111,22 +111,28 @@ install one locally instead, sign it with a certificate whose subject matches th
 ### Package identity
 
 `msix/AppxManifest.xml` is a template; the build fills in four tokens. Three of them
-come from `msix/identity.cmd`, which ships with **test values that the Store will
+come from `msix/identity.json`, which ships with **test values that the Store will
 reject**. For a real submission they must match Partner Center (Product > Product
 identity) exactly:
 
-| Variable | Partner Center field |
+| Key | Partner Center field |
 | --- | --- |
-| `MSIX_IDENTITY_NAME` | `Package/Identity/Name` |
-| `MSIX_PUBLISHER` | `Package/Identity/Publisher` (`CN=...`) |
-| `MSIX_PUBLISHER_DISPLAY` | `Package/Properties/PublisherDisplayName` |
+| `identityName` | `Package/Identity/Name` |
+| `publisher` | `Package/Identity/Publisher` (`CN=...`) |
+| `publisherDisplayName` | `Package/Properties/PublisherDisplayName` |
 
 The fourth, the version, is read from `package.json` and gets `.0` appended, since
 the Store requires the revision part to be zero (`0.5.0` → `0.5.0.0`).
 
 Because the build clone is reset to `origin/main` on every run, keep your real values
-outside the repository at `%USERPROFILE%\.json-diver-msix.cmd` (same `set` lines);
-the script prefers that file when it exists.
+outside the repository at `%USERPROFILE%\.json-diver-msix.json` (same keys); the
+script prefers that file when it exists.
+
+The identity is deliberately **JSON read by PowerShell, not `set` lines in a `.cmd`**.
+cmd.exe reads a batch file in the console code page, so a publisher name like `デジ式`
+stored in a UTF-8 `.cmd` would reach the manifest as mojibake and be rejected on
+upload. The build prints the three values it actually used — check them against
+Partner Center before uploading.
 
 Notes on the manifest:
 
