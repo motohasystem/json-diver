@@ -86,11 +86,61 @@ push your changes before building, and never edit it directly.
   moves, and JSON-looking text is emitted to the webview as `clipboard-text`. Unlike the
   browser edition this needs no window focus
 
+## MSIX (Microsoft Store)
+
+Tauri has no MSIX bundler, so the Store package is built by handing the release
+`.exe` to `MakeAppx.exe` from the Windows SDK. `build-msix.bat` does the whole
+run — refresh the checkout, `npm install`, regenerate the Store logo set
+(`npm run icon`), `tauri build`, stage the package layout, fill in the manifest and
+pack it:
+
+```bat
+build-msix.bat [build directory]
+```
+
+Output: `desktop/src-tauri/target/release/bundle/msix/JSON Diver_<version>_x64.msix`
+
+The package is deliberately **unsigned** — Partner Center signs it on upload. To
+install one locally instead, sign it with a certificate whose subject matches the
+`Publisher` value exactly, then trust that certificate on the target machine.
+
+### Package identity
+
+`msix/AppxManifest.xml` is a template; the build fills in four tokens. Three of them
+come from `msix/identity.cmd`, which ships with **test values that the Store will
+reject**. For a real submission they must match Partner Center (Product > Product
+identity) exactly:
+
+| Variable | Partner Center field |
+| --- | --- |
+| `MSIX_IDENTITY_NAME` | `Package/Identity/Name` |
+| `MSIX_PUBLISHER` | `Package/Identity/Publisher` (`CN=...`) |
+| `MSIX_PUBLISHER_DISPLAY` | `Package/Properties/PublisherDisplayName` |
+
+The fourth, the version, is read from `package.json` and gets `.0` appended, since
+the Store requires the revision part to be zero (`0.5.0` → `0.5.0.0`).
+
+Because the build clone is reset to `origin/main` on every run, keep your real values
+outside the repository at `%USERPROFILE%\.json-diver-msix.cmd` (same `set` lines);
+the script prefers that file when it exists.
+
+Notes on the manifest:
+
+- `runFullTrust` is required for a packaged Win32 app. It is a restricted capability,
+  so Partner Center asks you to justify it during submission — routine for desktop apps.
+- The `.json` file association is declared with `windows.fileTypeAssociation`, which
+  gives the same double-click behaviour as the NSIS build's registry entries.
+
 ## Files
 
 ```
 desktop/
 ├── package.json
+├── build-windows.bat       # NSIS installer build
+├── build-msix.bat          # MSIX (Store) package build
+├── msix/
+│   ├── AppxManifest.xml    # manifest template (__TOKENS__ filled at build time)
+│   └── identity.cmd        # package identity (test values by default)
 └── src-tauri/
     ├── Cargo.toml
     ├── build.rs
