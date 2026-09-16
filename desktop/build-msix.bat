@@ -84,7 +84,7 @@ if exist "%USERPROFILE%\.json-diver-msix.cmd" (
     echo --- identity from %USERPROFILE%\.json-diver-msix.cmd ---
     call "%USERPROFILE%\.json-diver-msix.cmd"
 ) else (
-    echo --- identity from msix\identity.cmd (TEST values) ---
+    echo --- identity from msix\identity.cmd - TEST VALUES ---
     call "%BUILD_DIR%\desktop\msix\identity.cmd"
 )
 if not defined MSIX_IDENTITY_NAME goto :fail
@@ -125,14 +125,14 @@ set "OUTDIR=%BUILD_DIR%\desktop\src-tauri\target\release\bundle\msix"
 echo --- staging %STAGE% ---
 if exist "%STAGE%" rmdir /s /q "%STAGE%"
 mkdir "%STAGE%\Assets" || goto :fail
-copy /y "%EXE%" "%STAGE%\" >nul || goto :fail
+copy /y "%EXE%" "%STAGE%\." >nul || goto :fail
 
 call :asset Square44x44Logo.png   || goto :fail
 call :asset Square150x150Logo.png || goto :fail
 call :asset StoreLogo.png         || goto :fail
 REM Optional extras: copied when the icon generator produced them.
 for %%A in (Square30x30Logo.png Square71x71Logo.png Square89x89Logo.png Square107x107Logo.png Square142x142Logo.png Square284x284Logo.png Square310x310Logo.png) do (
-    if exist "%BUILD_DIR%\desktop\src-tauri\icons\%%A" copy /y "%BUILD_DIR%\desktop\src-tauri\icons\%%A" "%STAGE%\Assets\" >nul
+    if exist "%BUILD_DIR%\desktop\src-tauri\icons\%%A" copy /y "%BUILD_DIR%\desktop\src-tauri\icons\%%A" "%STAGE%\Assets\." >nul
 )
 
 REM ---- fill the manifest template ----
@@ -163,7 +163,7 @@ REM Copy one required logo, falling back to the 128x128 app icon if the Store
 REM logo set was not generated. Windows scales the fallback; the Store may not
 REM accept it, so the warning matters.
 if exist "%BUILD_DIR%\desktop\src-tauri\icons\%~1" (
-    copy /y "%BUILD_DIR%\desktop\src-tauri\icons\%~1" "%STAGE%\Assets\" >nul
+    copy /y "%BUILD_DIR%\desktop\src-tauri\icons\%~1" "%STAGE%\Assets\." >nul
     exit /b 0
 )
 if exist "%BUILD_DIR%\desktop\src-tauri\icons\128x128.png" (
