@@ -1982,7 +1982,16 @@
 
   // Hold a highlight over the whole node - row and everything under it - so the
   // result of an insert is visible instead of having to be hunted for.
-  const INSERT_FLASH_MS = 2400;
+  // The duration lives in CSS (--insert-flash, longer on phones); read it back so
+  // the class is dropped exactly when the animation ends, with no second constant.
+  function insertFlashMs() {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue("--insert-flash").trim();
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return 2400;
+    return raw.endsWith("ms") ? n : n * 1000;
+  }
+
   function flashNode(treeEl, path) {
     const want = JSON.stringify(path);
     const node = Array.from(treeEl.querySelectorAll(".node[data-path]"))
@@ -1992,7 +2001,7 @@
     void node.offsetWidth; // restart the animation when the same node is hit twice
     node.classList.add("just-inserted");
     node.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    setTimeout(() => node.classList.remove("just-inserted"), INSERT_FLASH_MS);
+    setTimeout(() => node.classList.remove("just-inserted"), insertFlashMs());
   }
 
   // Apply on a draft first and keep it only if the schema does not get worse -

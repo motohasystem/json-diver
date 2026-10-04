@@ -101,6 +101,9 @@ Switch between **View / Edit / Raw** with the switch on the right of the toolbar
     refused rather than overwritten
   - **Enter** inserts, **Esc** cancels. The insert is undoable with Ctrl+Z, and the
     same schema guard applies — an insert that would add violations is rolled back
+  - The inserted node is highlighted, children and all, for 2.4 seconds (3.6 on a
+    narrow screen, where it is easier to miss) and scrolled into view if it landed
+    off-screen
   - It works inside a zoom view too, so you can paste into escaped JSON
 - **Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z or Ctrl+Y)** step through the edit history
 

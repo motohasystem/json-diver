@@ -20,6 +20,9 @@
   /* depth-step = .node padding-left (no more .children margin/border) */
   --depth-step: 40px;
   --depth-guide: rgba(122, 162, 255, 0.10);
+  /* How long a freshly inserted node stays highlighted. Longer on phones, where
+     the result is easier to miss (see the narrow-screen media query). */
+  --insert-flash: 2400ms;
 }
 
 * { box-sizing: border-box; }
@@ -659,7 +662,7 @@ body.dnd-active { user-select: none; }
 /* Freshly inserted node: hold a green wash over the whole subtree, then fade out */
 .node.just-inserted {
   border-radius: 4px;
-  animation: node-inserted 2.4s ease-out forwards;
+  animation: node-inserted var(--insert-flash) ease-out forwards;
 }
 @keyframes node-inserted {
   0%   { background: rgba(87, 209, 138, 0.30); box-shadow: inset 3px 0 0 var(--ok); }
@@ -1025,6 +1028,10 @@ body.edit-mode .row-act-paste { display: inline-block; }
 #sidebar-backdrop { display: none; }
 
 @media (max-width: 760px) {
+  /* Hold the insert highlight longer on a phone: the tree is narrow, the result
+     often lands off-screen, and there is no hover to re-check with. */
+  :root { --insert-flash: 3600ms; }
+
   #btn-sidebar { display: inline-block; }
 
   /* Fixed, so the tree gets the full width while the panel is closed. */
