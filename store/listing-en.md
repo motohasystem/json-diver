@@ -53,6 +53,12 @@ Three modes, one switch:
   node before, inside or after another one
 - **Raw** — the JSON as text, for when it is simply faster to type
 
+Editing also reaches across documents. Copy JSON anywhere — a node from another
+window, a fragment from a chat message — press **+** on the row you want it next to,
+and choose whether it goes before, inside or after. Inserting into an object asks for
+a key, the new node is highlighted so you can see where it landed, and anything that
+would break a loaded schema is refused before it is applied.
+
 Everything is undoable with Ctrl+Z, whichever mode you made the change in.
 
 **Validate against a JSON Schema**
@@ -110,8 +116,9 @@ https://github.com/motohasystem/json-diver
 10. Undo and redo across every kind of edit (Ctrl+Z / Ctrl+Shift+Z)
 11. Raw mode for editing the JSON directly as text
 12. Pretty toggle: 2-space indentation or minified to one line, everywhere at once
-13. Validates against a JSON Schema as you type, highlighting violations in the tree
-14. Blocks drag-and-drop moves that would introduce new schema violations
+13. Validates against a JSON Schema as you type, highlighting violations in the tree,
+    and refuses edits that would introduce new ones
+14. Inserts JSON from the clipboard as a new node, before, inside or after any row
 15. Clipboard watch: JSON copied in any application is loaded automatically
 16. Opens `.json` files on double-click once the file type is associated
 17. Ctrl+S saves back over the original file as UTF-8 without a BOM
