@@ -272,4 +272,4 @@ The desktop edition is the same screen as the browser edition plus file handling
 
 ---
 
-*This document describes the features as of v0.5.0.*
+*This document describes the features as of v0.6.0.*
