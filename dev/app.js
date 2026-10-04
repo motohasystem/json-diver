@@ -40,6 +40,8 @@
   const $minimapCanvas = document.getElementById("minimap-canvas");
   const $minimapViewport = document.getElementById("minimap-viewport");
   const $toast = document.getElementById("toast");
+  const $btnSidebar = document.getElementById("btn-sidebar");
+  const $sidebarBackdrop = document.getElementById("sidebar-backdrop");
 
   function showToast(msg, ms = 4000, type = "error") {
     $toast.hidden = false;
@@ -2597,13 +2599,30 @@
       scrollTo(ratio * treeH);
     }
 
+    // Pointer events so a finger drag works the same as a mouse drag. The capture
+    // keeps the gesture attached to the minimap even when it wanders off the element,
+    // and preventDefault stops touch-scrolling/selection from hijacking it.
     let dragging = false;
-    const onDown = (e) => { dragging = true; scrollFromClient(e.clientY); };
-    const onMove = (e) => { if (dragging) scrollFromClient(e.clientY); };
+    const onDown = (e) => {
+      dragging = true;
+      if (mapEl.setPointerCapture) {
+        try { mapEl.setPointerCapture(e.pointerId); } catch (_) { /* not capturable */ }
+      }
+      scrollFromClient(e.clientY);
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      scrollFromClient(e.clientY);
+      e.preventDefault();
+    };
     const onUp = () => { dragging = false; };
-    mapEl.addEventListener("mousedown", onDown);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    mapEl.addEventListener("pointerdown", onDown);
+    mapEl.addEventListener("pointermove", onMove);
+    mapEl.addEventListener("pointerup", onUp);
+    mapEl.addEventListener("pointercancel", onUp);
+    // Fallback for a pointer released outside a browser that did not capture it.
+    window.addEventListener("pointerup", onUp);
 
     const mo = new MutationObserver(redraw);
     mo.observe(treeEl, {
@@ -2621,9 +2640,11 @@
       redraw,
       updateViewport,
       destroy() {
-        mapEl.removeEventListener("mousedown", onDown);
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
+        mapEl.removeEventListener("pointerdown", onDown);
+        mapEl.removeEventListener("pointermove", onMove);
+        mapEl.removeEventListener("pointerup", onUp);
+        mapEl.removeEventListener("pointercancel", onUp);
+        window.removeEventListener("pointerup", onUp);
         mo.disconnect();
         if (ro) ro.disconnect();
       },
@@ -2659,6 +2680,31 @@
   });
 
   function scheduleMinimapRedraw() { mainMinimap.redraw(); }
+
+  // ---------- Side panel drawer (narrow screens) ----------
+
+  // On a phone the sidebar would eat the width the tree needs, so there it lives
+  // off-canvas and this button slides it in. Wide screens keep it always visible
+  // and never show the button (CSS decides; this only toggles the class).
+  function setSidebarOpen(open) {
+    document.body.classList.toggle("sidebar-open", open);
+    $btnSidebar.setAttribute("aria-expanded", String(open));
+    $btnSidebar.classList.toggle("active", open);
+    $btnSidebar.title = open ? "Hide the side panel" : "Show the side panel";
+    $sidebarBackdrop.hidden = !open;
+    // The minimap was off-screen until now; its canvas needs the real box size.
+    if (open) requestAnimationFrame(() => mainMinimap.redraw());
+  }
+  function isSidebarOpen() { return document.body.classList.contains("sidebar-open"); }
+
+  $btnSidebar.addEventListener("click", () => setSidebarOpen(!isSidebarOpen()));
+  $sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
+  document.addEventListener("keydown", (e) => {
+    // Modals own Escape while one is open.
+    if (e.key === "Escape" && modalStack.length === 0 && isSidebarOpen()) {
+      setSidebarOpen(false);
+    }
+  });
 
   $treeScroll.addEventListener("scroll", mainMinimap.updateViewport, { passive: true });
   window.addEventListener("resize", () => { fitContentHeight(); mainMinimap.redraw(); });

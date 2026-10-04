@@ -938,6 +938,9 @@ body.edit-mode .row-act-paste { display: inline-block; }
   border-radius: 4px;
   overflow: hidden;
   cursor: pointer;
+  /* Own the gesture: without this the browser scrolls the page instead of
+     letting a finger drag the viewport indicator. */
+  touch-action: none;
 }
 .minimap canvas {
   position: absolute;
@@ -975,3 +978,45 @@ body.edit-mode .row-act-paste { display: inline-block; }
   width: fit-content;
 }
 .app-link:hover { text-decoration: underline; }
+
+/* ---------- Narrow screens: the sidebar becomes a drawer ---------- */
+
+/* The toggle only exists where the drawer does. */
+#btn-sidebar { display: none; }
+#sidebar-backdrop { display: none; }
+
+@media (max-width: 760px) {
+  #btn-sidebar { display: inline-block; }
+
+  /* Fixed, so the tree gets the full width while the panel is closed. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    z-index: 170;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    padding: 12px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.18s ease-out;
+  }
+  body.sidebar-open .sidebar { transform: none; }
+
+  body.sidebar-open #sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 160;
+    background: rgba(15, 17, 21, 0.6);
+  }
+
+  /* Give the drawer's minimap a usable height even in a scrolling panel. */
+  .sidebar .minimap { min-height: 200px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; }
+}

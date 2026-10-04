@@ -42,6 +42,7 @@
           <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
           <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
           <button id="violation-badge" type="button" class="violation-badge" hidden title="Schema violations"></button>
+          <button id="btn-sidebar" type="button" aria-expanded="false" title="Show the side panel">Panel</button>
         </div>
       </div>
       <div id="error" class="error" hidden></div>
@@ -84,6 +85,7 @@
   </div>
 </main>
 
+<div id="sidebar-backdrop" hidden></div>
 <div id="tooltip" class="tooltip" hidden></div>
 <div id="modal-stack" class="modal-stack" aria-hidden="true"></div>
 <div id="toast" class="toast" hidden role="status"></div>
