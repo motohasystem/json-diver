@@ -719,6 +719,7 @@
   function buildRowActions(node, isContainer) {
     const actions = el("span", "row-actions");
     actions.appendChild(buildCopyButton(node));
+    actions.appendChild(buildPasteButton(node)); // CSS hides it outside Edit mode
     if (isContainer) actions.appendChild(buildSiblingToggleButton(node));
     return actions;
   }
@@ -753,6 +754,7 @@
       const text = typeof value === "string" ? value : serializeDoc(value);
       try {
         Clip.lastCopied = text;
+        Clip.lastCopiedKey = typeof Path.last(path) === "string" ? Path.last(path) : "";
         await navigator.clipboard.writeText(text);
         showToast("Copied to clipboard", 1500, "ok");
         btn.classList.remove("copied");
@@ -1438,6 +1440,7 @@
     installed: false, // web listeners attached
     lastSeen: "",     // clipboard text already handled (or rejected)
     lastCopied: "",   // text this app itself put on the clipboard
+    lastCopiedKey: "", // the key that text was copied from, for the paste popup
   };
 
   // Load `text` if it is a JSON object/array we have not already handled.
@@ -1876,6 +1879,231 @@
       DnD.schemaCache.clear();
     },
   };
+
+  // ---------- Paste a node from the clipboard (Edit mode) ----------
+
+  // Insert JSON copied from anywhere - another window, another app - as a node at a
+  // chosen position. Same three positions as drag and drop, same schema guard, same
+  // undo history.
+
+  function buildPasteButton(node) {
+    const btn = el("button", "row-act row-act-paste", "\u{1F4E5}");
+    btn.type = "button";
+    btn.title = "Insert JSON from the clipboard here";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hideTooltip();
+      openPastePopup(node, btn);
+    });
+    return btn;
+  }
+
+  // Insert `value` into `root`. Mirrors applyMove's positions: "into" appends to the
+  // target container, "before"/"after" place it as a sibling of the target.
+  function applyInsert(root, targetPath, position, key, value) {
+    if (position === "into") {
+      const target = targetPath.length === 0 ? root : Path.get(root, targetPath);
+      if (Array.isArray(target)) { target.push(value); return; }
+      if (target !== null && typeof target === "object") { target[key] = value; return; }
+      throw new Error("target is not a container");
+    }
+    if (targetPath.length === 0) throw new Error("the root has no siblings");
+    const parent = Path.parent(root, targetPath);
+    const refKey = Path.last(targetPath);
+    if (Array.isArray(parent)) {
+      parent.splice(position === "before" ? refKey : refKey + 1, 0, value);
+      return;
+    }
+    if (parent !== null && typeof parent === "object") {
+      parent[key] = value;
+      Path.reorderObject(parent, key, refKey, position);
+      return;
+    }
+    throw new Error("parent is not a container");
+  }
+
+  // Re-render the pane a mutation landed in, then write the document back out.
+  function refreshPaneAfterMutation(treeEl) {
+    if (treeEl === $tree) {
+      renderTree(state.data, $tree);
+    } else {
+      const root = treeEl._jdRoot;
+      treeEl.innerHTML = "";
+      const rootNode = renderNode(null, root, true);
+      rootNode.classList.add("root");
+      treeEl.appendChild(rootNode);
+      const { depthBarEl } = paneOf(treeEl);
+      if (depthBarEl) renderDepthBar(depthBarEl, treeEl, root);
+      propagateModalChange(treeEl); // writes the change back up into state.data
+      const entry = modalStack.find((m) => m.innerTree === treeEl);
+      if (entry && entry.minimap) entry.minimap.redraw();
+    }
+    const text = serializeDoc(state.data);
+    $input.value = text;
+    saveToStorage(text);
+    revalidate();
+    scheduleMinimapRedraw();
+  }
+
+  // Apply on a draft first and keep it only if the schema does not get worse -
+  // the same two-stage defense drag and drop uses.
+  function commitInsert(treeEl, targetPath, position, key, value) {
+    const isModal = treeEl !== $tree;
+    const liveRoot = isModal ? treeEl._jdRoot : state.data;
+    let draft;
+    try { draft = structuredClone(liveRoot); }
+    catch (_) { draft = JSON.parse(JSON.stringify(liveRoot)); }
+
+    try { applyInsert(draft, targetPath, position, key, value); }
+    catch (err) { showToast(`Insert failed: ${err.message}`); return false; }
+
+    // The schema describes the main document, so only that one is checked.
+    if (!isModal && state.schema) {
+      const oldCount = state.violations.length;
+      const newCount = Schema.validate(draft).length;
+      if (newCount > oldCount) {
+        showToast(`Rolled back: schema violations would increase (${oldCount} \u2192 ${newCount})`);
+        return false;
+      }
+    }
+
+    History.pushBefore();
+    if (isModal) treeEl._jdRoot = draft; else state.data = draft;
+    refreshPaneAfterMutation(treeEl);
+    return true;
+  }
+
+  let pastePopup = null;
+  function closePastePopup() {
+    if (!pastePopup) return;
+    pastePopup.remove();
+    pastePopup = null;
+    document.removeEventListener("mousedown", onPasteOutside, true);
+  }
+  function onPasteOutside(e) {
+    if (pastePopup && !pastePopup.contains(e.target)) closePastePopup();
+  }
+
+  // Pick a key that is free in `container`, starting from `base`.
+  function freeKey(container, base) {
+    const name = base || "pasted";
+    if (!container || typeof container !== "object" || !(name in container)) return name;
+    for (let i = 2; i < 1000; i++) {
+      if (!(`${name}_${i}` in container)) return `${name}_${i}`;
+    }
+    return name;
+  }
+
+  async function openPastePopup(node, btn) {
+    closePastePopup();
+    let text;
+    try { text = await navigator.clipboard.readText(); }
+    catch (err) { showToast(`Paste failed: ${err.message}`); return; }
+    if (!text || !text.trim()) { showToast("Clipboard is empty"); return; }
+    let value;
+    try { value = JSON.parse(text.trim()); }
+    catch (err) { showToast(`Clipboard is not JSON: ${err.message}`); return; }
+
+    const treeEl = node.closest(".tree");
+    if (!treeEl) return;
+    const root = treeEl === $tree ? state.data : treeEl._jdRoot;
+    const targetPath = parsePath(node);
+    const target = targetPath.length === 0 ? root : Path.get(root, targetPath);
+    const parent = targetPath.length === 0 ? null : Path.parent(root, targetPath);
+
+    // Which positions make sense here, and which of them need a key typed in
+    const canInto = target !== null && typeof target === "object";
+    const canSibling = targetPath.length > 0 && parent !== null && typeof parent === "object";
+    if (!canInto && !canSibling) { showToast("Nothing can be inserted here"); return; }
+    const intoNeedsKey = canInto && !Array.isArray(target);
+    const siblingNeedsKey = canSibling && !Array.isArray(parent);
+
+    const pop = el("div", "paste-pop");
+    pop.appendChild(el("div", "paste-pop-title", "Paste from clipboard"));
+
+    const preview = el("div", "paste-pop-preview");
+    const oneLine = JSON.stringify(value);
+    preview.textContent = oneLine.length > 90 ? oneLine.slice(0, 90) + "\u2026" : oneLine;
+    preview.title = oneLine;
+    pop.appendChild(preview);
+
+    let keyInput = null;
+    if (intoNeedsKey || siblingNeedsKey) {
+      const row = el("div", "paste-pop-key");
+      row.appendChild(el("label", "", "key"));
+      keyInput = el("input", "paste-pop-input");
+      keyInput.type = "text";
+      // Offer the key this node was copied under, when the clipboard still holds it.
+      const base = (text === Clip.lastCopied && Clip.lastCopiedKey) || "pasted";
+      keyInput.value = freeKey(intoNeedsKey ? target : parent, base);
+      row.appendChild(keyInput);
+      pop.appendChild(row);
+      // Only some positions put the node in an object, so say which ones use the key.
+      if (intoNeedsKey !== siblingNeedsKey) {
+        pop.appendChild(el("div", "paste-pop-hint",
+          intoNeedsKey ? "key applies to Inside" : "key applies to Before / After"));
+      }
+    }
+
+    const err = el("div", "paste-pop-error");
+    err.hidden = true;
+    pop.appendChild(err);
+
+    const run = (position) => {
+      const needsKey = position === "into" ? intoNeedsKey : siblingNeedsKey;
+      let key = null;
+      if (needsKey) {
+        key = keyInput.value.trim();
+        const container = position === "into" ? target : parent;
+        if (!key) { err.hidden = false; err.textContent = "Enter a key"; keyInput.focus(); return; }
+        if (key in container) {
+          err.hidden = false;
+          err.textContent = `"${key}" already exists here`;
+          keyInput.focus(); keyInput.select();
+          return;
+        }
+      }
+      closePastePopup();
+      if (commitInsert(treeEl, targetPath, position, key, value)) {
+        showToast("Inserted from clipboard \u2014 Ctrl+Z to undo", 2500, "ok");
+      }
+    };
+
+    const buttons = el("div", "paste-pop-actions");
+    const addBtn = (label, position, enabled) => {
+      const b = el("button", "paste-pop-btn", label);
+      b.type = "button";
+      b.disabled = !enabled;
+      b.addEventListener("click", () => run(position));
+      buttons.appendChild(b);
+      return b;
+    };
+    addBtn("\u2191 Before", "before", canSibling);
+    const intoBtn = addBtn("\u2192 Inside", "into", canInto);
+    addBtn("\u2193 After", "after", canSibling);
+    pop.appendChild(buttons);
+
+    pop.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); closePastePopup(); }
+      else if (e.key === "Enter") { e.preventDefault(); run(canInto ? "into" : "after"); }
+    });
+
+    document.body.appendChild(pop);
+    pastePopup = pop;
+
+    // Anchor to the button, kept inside the viewport.
+    const r = btn.getBoundingClientRect();
+    const pr = pop.getBoundingClientRect();
+    let left = Math.min(r.left, window.innerWidth - pr.width - 8);
+    let top = r.bottom + 6;
+    if (top + pr.height > window.innerHeight - 8) top = Math.max(8, r.top - pr.height - 6);
+    pop.style.left = `${Math.max(8, left)}px`;
+    pop.style.top = `${top}px`;
+
+    if (keyInput) { keyInput.focus(); keyInput.select(); }
+    else intoBtn.focus();
+    document.addEventListener("mousedown", onPasteOutside, true);
+  }
 
   function syncSwitches(mode) {
     document.querySelectorAll(".mode-switch").forEach((sw) => {

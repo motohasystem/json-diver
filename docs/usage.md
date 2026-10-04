@@ -82,6 +82,19 @@ Switch between **View / Edit / Raw** with the switch on the right of the toolbar
     insert after (drop on the top, middle or bottom of the target row)
   - With a schema loaded, **moves that would add violations are blocked** and
     "Would violate the schema" is shown
+- **📥 on a row inserts JSON from the clipboard as a new node** — the way to bring a
+  node over from another document or another window
+  - Copy any JSON (the 📋 button on a row, or text from any other application), then
+    press 📥 on the row you want it next to
+  - A small popup shows what is on the clipboard and offers the same three positions:
+    **↑ Before**, **→ Inside**, **↓ After**. Positions that make no sense for that row
+    are greyed out
+  - Inserting into an **object** asks for a key; into an **array** it does not. The key
+    is pre-filled with the key the node was copied from, and a key already in use is
+    refused rather than overwritten
+  - **Enter** inserts, **Esc** cancels. The insert is undoable with Ctrl+Z, and the
+    same schema guard applies — an insert that would add violations is rolled back
+  - It works inside a zoom view too, so you can paste into escaped JSON
 - **Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z or Ctrl+Y)** step through the edit history
 
 ### Raw mode (text editing)

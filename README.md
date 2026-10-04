@@ -38,7 +38,9 @@ What the native edition adds:
   across the Raw view, pastes, and Copy/Download alike
 - **Watch** toggle: JSON copied to the clipboard is loaded automatically (instantly in
   the native edition; on returning to the tab in Chrome/Edge)
-- Inline value editing, copy, download
+- Inline value editing, drag-and-drop node moves, and 📥 to insert JSON from the
+  clipboard as a node — before, inside or after any row
+- Copy, download
 - Validation against a JSON Schema
 - Minimap for an overview and quick jumps
 

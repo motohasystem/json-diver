@@ -647,6 +647,67 @@ body.dnd-active { user-select: none; }
   border-color: var(--accent);
   background: rgba(122, 162, 255, 0.08);
 }
+/* Paste-insert is an Edit-mode action only */
+.row-act-paste { display: none; }
+body.edit-mode .row-act-paste { display: inline-block; }
+
+/* Popup for inserting clipboard JSON at a chosen position */
+.paste-pop {
+  position: fixed;
+  /* Above the modal stack (150) so it works inside a zoom view, below toasts (200) */
+  z-index: 180;
+  min-width: 300px;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  padding: 12px;
+  font-size: 12px;
+}
+.paste-pop-title { color: var(--fg-dim); margin-bottom: 8px; }
+.paste-pop-preview {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--string);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.paste-pop-key { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.paste-pop-key label { color: var(--fg-dim); }
+.paste-pop-input {
+  flex: 1;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.paste-pop-input:focus { outline: none; border-color: var(--accent); }
+.paste-pop-hint { color: var(--fg-dim); font-size: 11px; margin: -4px 0 8px 30px; }
+.paste-pop-error { color: var(--err); margin-bottom: 8px; }
+.paste-pop-actions { display: flex; gap: 6px; }
+.paste-pop-btn {
+  flex: 1;
+  background: var(--panel-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.paste-pop-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.paste-pop-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
 .row-act-copy {
   font-size: 10px;
   letter-spacing: 0;
