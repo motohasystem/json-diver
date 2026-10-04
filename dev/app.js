@@ -1905,9 +1905,9 @@
   // undo history.
 
   function buildPasteButton(node) {
-    // A text glyph, not an emoji: emoji are colour bitmaps that ignore CSS `color`,
-    // so they cannot take the accent highlight on hover the way this one does.
-    const btn = el("button", "row-act row-act-paste", "\u21A7");
+    // A plain text glyph, not an emoji: emoji are colour bitmaps that ignore CSS
+    // `color`, so they cannot take the accent highlight on hover the way this does.
+    const btn = el("button", "row-act row-act-paste", "+");
     btn.type = "button";
     attachActionTooltip(btn, "Insert from clipboard",
       "Pastes JSON from the clipboard as a new node \u2014 you choose before, inside or after this row");
@@ -1966,6 +1966,35 @@
     scheduleMinimapRedraw();
   }
 
+  function insertedPath(root, targetPath, position, key) {
+    if (position === "into") {
+      const target = targetPath.length === 0 ? root : Path.get(root, targetPath);
+      return [...targetPath, Array.isArray(target) ? target.length - 1 : key];
+    }
+    const parentPath = targetPath.slice(0, -1);
+    const parent = Path.parent(root, targetPath);
+    if (Array.isArray(parent)) {
+      const refIdx = Path.last(targetPath);
+      return [...parentPath, position === "before" ? refIdx : refIdx + 1];
+    }
+    return [...parentPath, key];
+  }
+
+  // Hold a highlight over the whole node - row and everything under it - so the
+  // result of an insert is visible instead of having to be hunted for.
+  const INSERT_FLASH_MS = 2400;
+  function flashNode(treeEl, path) {
+    const want = JSON.stringify(path);
+    const node = Array.from(treeEl.querySelectorAll(".node[data-path]"))
+      .find((n) => n.dataset.path === want);
+    if (!node) return; // beyond the rendered chunk of a large container
+    node.classList.remove("just-inserted");
+    void node.offsetWidth; // restart the animation when the same node is hit twice
+    node.classList.add("just-inserted");
+    node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setTimeout(() => node.classList.remove("just-inserted"), INSERT_FLASH_MS);
+  }
+
   // Apply on a draft first and keep it only if the schema does not get worse -
   // the same two-stage defense drag and drop uses.
   function commitInsert(treeEl, targetPath, position, key, value) {
@@ -1988,9 +2017,12 @@
       }
     }
 
+    const landed = insertedPath(draft, targetPath, position, key);
+
     History.pushBefore();
     if (isModal) treeEl._jdRoot = draft; else state.data = draft;
-    refreshPaneAfterMutation(treeEl);
+    refreshPaneAfterMutation(treeEl); // rebuilds the pane, so flash after it
+    flashNode(treeEl, landed);
     return true;
   }
 

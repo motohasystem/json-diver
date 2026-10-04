@@ -647,13 +647,33 @@ body.dnd-active { user-select: none; }
   border-color: var(--accent);
   background: rgba(122, 162, 255, 0.16);
 }
-/* A text glyph needs a little more size than the emoji it replaced, and no
+/* The plus needs more weight and size than the emoji it replaced, and none of the
    negative tracking (that is tuned for the two-arrow sibling toggle). */
 .row-act-paste {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: 0;
-  line-height: 13px;
+  line-height: 12px;
+  padding: 0 6px;
 }
+/* Freshly inserted node: hold a green wash over the whole subtree, then fade out */
+.node.just-inserted {
+  border-radius: 4px;
+  animation: node-inserted 2.4s ease-out forwards;
+}
+@keyframes node-inserted {
+  0%   { background: rgba(87, 209, 138, 0.30); box-shadow: inset 3px 0 0 var(--ok); }
+  65%  { background: rgba(87, 209, 138, 0.18); box-shadow: inset 3px 0 0 var(--ok); }
+  100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node.just-inserted {
+    animation: none;
+    background: rgba(87, 209, 138, 0.18);
+    box-shadow: inset 3px 0 0 var(--ok);
+  }
+}
+
 /* Paste-insert is an Edit-mode action only */
 .row-act-paste { display: none; }
 body.edit-mode .row-act-paste { display: inline-block; }
