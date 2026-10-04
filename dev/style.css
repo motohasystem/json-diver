@@ -23,6 +23,9 @@
   /* How long a freshly inserted node stays highlighted. Longer on phones, where
      the result is easier to miss (see the narrow-screen media query). */
   --insert-flash: 2400ms;
+  /* Strength of the per-type wash behind each row - the hue matches the minimap. */
+  --row-tint-strength: 13%;
+  --row-tint-strength-escaped: 17%;
 }
 
 * { box-sizing: border-box; }
@@ -418,14 +421,15 @@ body.drag-over #drop-overlay { display: flex; }
 }
 
 /* --row-tint per type. color-mix keeps a single palette in :root; browsers without
-   it simply get no tint. */
-.row[data-type="object"]  { --row-tint: color-mix(in srgb, var(--accent)   7%, transparent); }
-.row[data-type="array"]   { --row-tint: color-mix(in srgb, var(--accent-2) 7%, transparent); }
-.row[data-type="string"]  { --row-tint: color-mix(in srgb, var(--string)   7%, transparent); }
-.row[data-type="number"]  { --row-tint: color-mix(in srgb, var(--number)   7%, transparent); }
-.row[data-type="boolean"] { --row-tint: color-mix(in srgb, var(--bool)     7%, transparent); }
-.row[data-type="null"]    { --row-tint: color-mix(in srgb, var(--null)     7%, transparent); }
-.row[data-type="escaped"] { --row-tint: color-mix(in srgb, var(--escaped) 10%, transparent); }
+   it simply get no tint. Strength is one knob (see :root) so every type stays in
+   step when it is adjusted. */
+.row[data-type="object"]  { --row-tint: color-mix(in srgb, var(--accent)   var(--row-tint-strength), transparent); }
+.row[data-type="array"]   { --row-tint: color-mix(in srgb, var(--accent-2) var(--row-tint-strength), transparent); }
+.row[data-type="string"]  { --row-tint: color-mix(in srgb, var(--string)   var(--row-tint-strength), transparent); }
+.row[data-type="number"]  { --row-tint: color-mix(in srgb, var(--number)   var(--row-tint-strength), transparent); }
+.row[data-type="boolean"] { --row-tint: color-mix(in srgb, var(--bool)     var(--row-tint-strength), transparent); }
+.row[data-type="null"]    { --row-tint: color-mix(in srgb, var(--null)     var(--row-tint-strength), transparent); }
+.row[data-type="escaped"] { --row-tint: color-mix(in srgb, var(--escaped)  var(--row-tint-strength-escaped), transparent); }
 .row:hover { background: var(--panel-2); }
 
 .row.depth-hover {
