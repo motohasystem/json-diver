@@ -718,6 +718,18 @@
     smoothScrollRaf = requestAnimationFrame(step);
   }
 
+  // The native `title` is slow, unstyled and says nothing about what happens next.
+  // These actions use the app's own tooltip instead: instant, and roomy enough to
+  // spell out the intent on a second line.
+  function attachActionTooltip(btn, label, detail) {
+    const html = `<div class="tooltip-label">${escapeHtml(label)}</div>` +
+      `<div class="tooltip-hint">${escapeHtml(detail)}</div>`;
+    btn.addEventListener("mouseenter", (e) => showTooltip(html, e.clientX, e.clientY, "action"));
+    btn.addEventListener("mousemove", (e) => positionTooltip(e.clientX, e.clientY));
+    btn.addEventListener("mouseleave", hideTooltip);
+    btn.addEventListener("click", hideTooltip);
+  }
+
   function buildRowActions(node, isContainer) {
     const actions = el("span", "row-actions");
     actions.appendChild(buildCopyButton(node));
@@ -740,7 +752,8 @@
   function buildCopyButton(node) {
     const btn = el("button", "row-act row-act-copy", "📋");
     btn.type = "button";
-    btn.title = "Copy this node as JSON";
+    attachActionTooltip(btn, "Copy",
+      "Copies this node and everything under it to the clipboard as JSON");
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       hideTooltip();
@@ -780,7 +793,10 @@
       const sibs = siblingContainers();
       const anyOpen = sibs.some((n) => !n.classList.contains("collapsed"));
       btn.textContent = anyOpen ? "▸▸" : "▾▾";
-      btn.title = anyOpen ? "Collapse siblings" : "Expand siblings";
+      attachActionTooltip(btn, anyOpen ? "Collapse siblings" : "Expand siblings",
+        anyOpen
+          ? "Closes every container at this level, keeping this row under the cursor"
+          : "Opens every container at this level, keeping this row under the cursor");
     }
     btn.addEventListener("mouseenter", refresh);
     btn.addEventListener("focus", refresh);
@@ -1889,9 +1905,12 @@
   // undo history.
 
   function buildPasteButton(node) {
-    const btn = el("button", "row-act row-act-paste", "\u{1F4E5}");
+    // A text glyph, not an emoji: emoji are colour bitmaps that ignore CSS `color`,
+    // so they cannot take the accent highlight on hover the way this one does.
+    const btn = el("button", "row-act row-act-paste", "\u21A7");
     btn.type = "button";
-    btn.title = "Insert JSON from the clipboard here";
+    attachActionTooltip(btn, "Insert from clipboard",
+      "Pastes JSON from the clipboard as a new node \u2014 you choose before, inside or after this row");
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       hideTooltip();

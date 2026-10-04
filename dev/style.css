@@ -645,7 +645,14 @@ body.dnd-active { user-select: none; }
 .row-act:hover {
   color: var(--accent);
   border-color: var(--accent);
-  background: rgba(122, 162, 255, 0.08);
+  background: rgba(122, 162, 255, 0.16);
+}
+/* A text glyph needs a little more size than the emoji it replaced, and no
+   negative tracking (that is tuned for the two-arrow sibling toggle). */
+.row-act-paste {
+  font-size: 13px;
+  letter-spacing: 0;
+  line-height: 13px;
 }
 /* Paste-insert is an Edit-mode action only */
 .row-act-paste { display: none; }
@@ -758,7 +765,9 @@ body.edit-mode .row-act-paste { display: inline-block; }
 /* Tooltip */
 .tooltip {
   position: fixed;
-  z-index: 100;
+  /* Above the modal stack (150) and the paste popup (180) so hints are readable
+     inside a zoom view too; toasts (200) still win. */
+  z-index: 190;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -779,6 +788,16 @@ body.edit-mode .row-act-paste { display: inline-block; }
   letter-spacing: 0.06em;
   margin-bottom: 4px;
 }
+/* Second line of an action tooltip: says what the click will actually do. */
+.tooltip-hint {
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 280px;
+  white-space: normal;
+}
+
 .tooltip-value {
   color: var(--fg);
   white-space: pre-wrap;
