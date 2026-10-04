@@ -200,11 +200,15 @@ included) / `prefixItems` / `minItems` / `maxItems` / `oneOf` / `anyOf` / `$ref`
 
 The lower part of the right sidebar shows the whole tree in miniature.
 
-- Colored bars per type give you the shape at a glance
+- Colored bars per type give you the shape at a glance. Each row in the tree carries
+  the same colour as a faint wash behind its text, so a stripe in the map and a line in
+  the tree are recognisably the same thing
 - A translucent frame marks the range currently on screen
 - **Click or drag** to scroll straight to that position — with a mouse, or by dragging
   a finger down the strip on a touch screen
-- Zoom modals get their own independent minimap
+- Zoom modals get their own independent minimap. On a narrow screen it starts closed
+  there too — press **Panel** in the zoom view's header to slide it in, and **Esc**
+  closes the panel before it closes the zoom view
 
 ## Keyboard shortcuts
 

@@ -581,6 +581,7 @@
     const escapedParsed = t === "string" ? tryParseEscapedJson(value) : null;
     const effectiveType = escapedParsed ? "escaped" : t;
 
+    row.dataset.type = effectiveType; // drives the faint minimap-matching tint
     const icon = el("span", `icon t-${effectiveType}`, TYPE_ICONS[effectiveType]);
     row.appendChild(icon);
 
@@ -1243,6 +1244,12 @@
     head.appendChild(title);
     const headActions = el("div", "modal-head-actions");
     headActions.appendChild(buildModeSwitch());
+    // Narrow screens only (CSS decides): the minimap panel starts closed there.
+    const panelBtn = el("button", "modal-panel-btn", "Panel");
+    panelBtn.type = "button";
+    panelBtn.setAttribute("aria-expanded", "false");
+    panelBtn.title = "Show the minimap";
+    headActions.appendChild(panelBtn);
     const closeBtn = el("button", "modal-close", "Close (Esc)");
     closeBtn.addEventListener("click", closeTopModal);
     headActions.appendChild(closeBtn);
@@ -1298,6 +1305,16 @@
     });
     body.addEventListener("scroll", minimap.updateViewport, { passive: true });
 
+    panelBtn.addEventListener("click", () => {
+      const open = !overlay.classList.contains("sidebar-open");
+      overlay.classList.toggle("sidebar-open", open);
+      panelBtn.setAttribute("aria-expanded", String(open));
+      panelBtn.classList.toggle("active", open);
+      panelBtn.title = open ? "Hide the minimap" : "Show the minimap";
+      // The panel was off-canvas and narrower than on desktop; resize the canvas.
+      if (open) requestAnimationFrame(() => minimap.redraw());
+    });
+
     modalStack.push({ overlay, minimap, depthDisposer, innerTree, parentNode });
     applyModeToPane(innerTree); // show raw editor immediately if already in raw mode
     requestAnimationFrame(() => minimap.redraw());
@@ -1316,9 +1333,15 @@
   }
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && modalStack.length > 0) {
-      closeTopModal();
+    if (e.key !== "Escape" || modalStack.length === 0) return;
+    const top = modalStack[modalStack.length - 1];
+    // An open minimap panel takes the first Escape; the modal itself takes the next.
+    if (top.overlay.classList.contains("sidebar-open")) {
+      const btn = top.overlay.querySelector(".modal-panel-btn");
+      if (btn) btn.click(); else top.overlay.classList.remove("sidebar-open");
+      return;
     }
+    closeTopModal();
   });
 
   // ---------- input handling ----------
@@ -2563,15 +2586,28 @@
 
   // ---------- minimap (reusable factory) ----------
 
-  const TYPE_COLORS = {
-    object: "#7aa2ff",
-    array: "#c792ea",
-    string: "#b8e986",
-    number: "#ffd866",
-    boolean: "#82e0ff",
-    null: "#ff8fa0",
-    escaped: "#ffb86c",
+  // The palette lives in CSS (:root), where the row tints also read it from, so the
+  // minimap bars and the faint row backgrounds are guaranteed to be the same hues.
+  const TYPE_COLOR_VARS = {
+    object: "--accent",
+    array: "--accent-2",
+    string: "--string",
+    number: "--number",
+    boolean: "--bool",
+    null: "--null",
+    escaped: "--escaped",
   };
+  let typeColorCache = null;
+  function typeColor(type) {
+    if (!typeColorCache) {
+      const cs = getComputedStyle(document.documentElement);
+      typeColorCache = {};
+      for (const [k, v] of Object.entries(TYPE_COLOR_VARS)) {
+        typeColorCache[k] = cs.getPropertyValue(v).trim() || "#888";
+      }
+    }
+    return typeColorCache[type] || typeColorCache.object;
+  }
 
   function rowType(row) {
     const icon = row.querySelector(".icon");
@@ -2621,7 +2657,7 @@
         const y = (rect.top - treeRect.top) * yScale;
         const h = Math.max(1, rect.height * yScale);
         const w = Math.max(1, xEnd - xStart);
-        ctx.fillStyle = TYPE_COLORS[rowType(row)] || "#888";
+        ctx.fillStyle = typeColor(rowType(row));
         ctx.fillRect(xStart, y, w, h);
       });
     }

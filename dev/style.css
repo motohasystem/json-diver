@@ -410,7 +410,22 @@ body.drag-over #drop-overlay { display: flex; }
   border-radius: 3px;
   cursor: default;
   white-space: nowrap;
+  /* Faint wash in the row's own type colour - the same hue the minimap paints that
+     row with, so a stripe in the map and a line in the tree read as the same thing.
+     Set as a variable (see the data-type rules) so hover, violations and drop
+     indicators, which set `background` directly, still win. */
+  background: var(--row-tint, transparent);
 }
+
+/* --row-tint per type. color-mix keeps a single palette in :root; browsers without
+   it simply get no tint. */
+.row[data-type="object"]  { --row-tint: color-mix(in srgb, var(--accent)   7%, transparent); }
+.row[data-type="array"]   { --row-tint: color-mix(in srgb, var(--accent-2) 7%, transparent); }
+.row[data-type="string"]  { --row-tint: color-mix(in srgb, var(--string)   7%, transparent); }
+.row[data-type="number"]  { --row-tint: color-mix(in srgb, var(--number)   7%, transparent); }
+.row[data-type="boolean"] { --row-tint: color-mix(in srgb, var(--bool)     7%, transparent); }
+.row[data-type="null"]    { --row-tint: color-mix(in srgb, var(--null)     7%, transparent); }
+.row[data-type="escaped"] { --row-tint: color-mix(in srgb, var(--escaped) 10%, transparent); }
 .row:hover { background: var(--panel-2); }
 
 .row.depth-hover {
@@ -882,6 +897,23 @@ body.edit-mode .row-act-paste { display: inline-block; }
   font-size: 12px;
 }
 .modal-close:hover { border-color: var(--err); color: var(--err); }
+/* Minimap panel toggle: only exists where the panel is a drawer (narrow screens) */
+.modal-panel-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.modal-panel-btn:hover { border-color: var(--accent); color: var(--accent); }
+.modal-panel-btn.active {
+  border-color: var(--accent);
+  background: rgba(122, 162, 255, 0.18);
+  color: var(--accent);
+}
 .modal-main {
   flex: 1;
   display: flex;
@@ -1033,6 +1065,22 @@ body.edit-mode .row-act-paste { display: inline-block; }
   :root { --insert-flash: 3600ms; }
 
   #btn-sidebar { display: inline-block; }
+  .modal-panel-btn { display: inline-block; }
+
+  /* The zoom view's minimap becomes a drawer over the tree, like the main one. */
+  .modal-main { position: relative; overflow: hidden; }
+  .modal-sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(300px, 80vw);
+    z-index: 2;
+    transform: translateX(100%);
+    transition: transform 0.18s ease-out;
+  }
+  .modal.sidebar-open .modal-sidebar { transform: none; }
+  .modal-sidebar .minimap { min-height: 200px; }
 
   /* Fixed, so the tree gets the full width while the panel is closed. */
   .sidebar {
@@ -1064,5 +1112,6 @@ body.edit-mode .row-act-paste { display: inline-block; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sidebar { transition: none; }
+  .sidebar,
+  .modal-sidebar { transition: none; }
 }
