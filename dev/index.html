@@ -18,12 +18,15 @@
        editor in the tree pane. -->
   <section id="dropzone" hidden>
     <textarea id="input" spellcheck="false"></textarea>
+    <!-- Same role as #input, for the second document in Split mode. -->
+    <textarea id="input-b" spellcheck="false"></textarea>
   </section>
 
   <div class="content">
-    <div class="tree-block">
+    <div class="tree-block" id="pane-a">
       <div class="tree-toolbar">
         <div class="data-actions">
+          <span class="pane-label">A</span>
           <button id="btn-sample" type="button">Sample</button>
           <button id="btn-paste" type="button">Paste</button>
           <button id="btn-watch" type="button" aria-pressed="false" title="Watch the clipboard">Watch</button>
@@ -33,11 +36,12 @@
           <button id="btn-clear" type="button">Clear</button>
         </div>
         <div class="mode-actions">
-          <div id="mode-switch" class="mode-switch" data-mode="view" role="group" aria-label="Mode">
+          <div id="mode-switch" class="mode-switch" data-mode="view" style="--mode-count: 4" role="group" aria-label="Mode">
             <div class="mode-thumb" aria-hidden="true"></div>
             <button class="mode-opt" data-mode="view" type="button">View</button>
             <button class="mode-opt" data-mode="edit" type="button">Edit</button>
             <button class="mode-opt" data-mode="raw" type="button">Raw</button>
+            <button class="mode-opt" data-mode="split" type="button">Split</button>
           </div>
           <button id="btn-undo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
           <button id="btn-redo" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo ↷</button>
@@ -49,6 +53,22 @@
       <div id="depth-bar" class="depth-bar" aria-label="Expand / collapse by depth"></div>
       <div class="tree-scroll">
         <section id="tree" class="tree" aria-label="JSON tree"></section>
+      </div>
+    </div>
+    <div class="tree-block" id="pane-b">
+      <div class="tree-toolbar">
+        <div class="data-actions">
+          <span class="pane-label">B</span>
+          <button id="btn-paste-b" type="button">Paste</button>
+          <button id="btn-copy-b" type="button" disabled>Copy</button>
+          <button id="btn-download-b" type="button" disabled>Download</button>
+          <button id="btn-clear-b" type="button">Clear</button>
+        </div>
+      </div>
+      <div id="error-b" class="error" hidden></div>
+      <div id="depth-bar-b" class="depth-bar" aria-label="Expand / collapse by depth"></div>
+      <div class="tree-scroll">
+        <section id="tree-b" class="tree" aria-label="JSON tree (pane B)"></section>
       </div>
     </div>
     <aside class="sidebar" aria-label="Reference">

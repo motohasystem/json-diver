@@ -33,7 +33,8 @@ What the native edition adds:
 ## Main features (both editions)
 
 - Renders JSON as a collapsible tree, expandable by depth
-- View / Edit / Raw modes (Raw edits the JSON text directly)
+- View / Edit / Raw / Split modes — Split puts two documents side by side and lets
+  you drag nodes from one into the other
 - **Pretty** toggle (on by default): 2-space pretty print ⇄ one-line minify, applied
   across the Raw view, pastes, and Copy/Download alike
 - **Watch** toggle: JSON copied to the clipboard is loaded automatically (instantly in

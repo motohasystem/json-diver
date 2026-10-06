@@ -56,15 +56,17 @@ press **Panel** in the toolbar. Tap the dimmed area beside it, press **Panel** a
 or press **Esc** to close it. Wide windows keep the sidebar in place as usual and
 never show the button.
 
-## The three modes
+## The four modes
 
-Switch between **View / Edit / Raw** with the switch on the right of the toolbar.
+Switch between **View / Edit / Raw / Split** with the switch on the right of the
+toolbar, or press **v** / **e** / **r** / **s**.
 
 | Mode | Purpose |
 | --- | --- |
 | **View** | Read-only: collapse, copy, zoom |
 | **Edit** | Inline value editing and drag & drop node moves |
 | **Raw** | Edit the raw JSON text directly |
+| **Split** | Two documents side by side, with nodes draggable from one to the other |
 
 ### View mode (reading)
 
@@ -116,6 +118,30 @@ Switch between **View / Edit / Raw** with the switch on the right of the toolbar
   - OFF … always shown and inserted minified to one line
 - Flipping the toggle immediately re-formats the open Raw editor and the whole
   document
+
+### Split mode (two documents)
+
+Split opens a second document, **pane B**, beside the one you already have in
+**pane A**, and lets you move nodes between them — the way to pull a block out of one
+API response and into a config file.
+
+- Pane B is loaded on its own: paste into its editor, press its **Paste** button, or
+  drop a file or text onto that side of the window. An empty pane shows a text editor,
+  which is where its document goes in
+- **Drag a node by its ⋮⋮ handle from one pane to the other.** It is a move: the node
+  leaves the pane it came from and lands where you dropped it, before / inside / after
+  the target row exactly like a move within one document. It keeps its key, and a key
+  already taken in the destination is refused rather than overwritten
+- The node that landed is highlighted, so the result is visible on the far side
+- **Ctrl+Z undoes a cross-pane move in one step**, putting the node back and removing
+  it from the destination together
+- Everything else works per pane: inline editing, ↧ insert from the clipboard, Copy,
+  Download, Clear
+- Pane B is remembered between sessions, and stays loaded when you leave Split
+
+What stays with pane A: the file on disk (**Ctrl+S** in the desktop edition), the JSON
+Schema, the minimap and the clipboard **Watch**. The side panel is hidden in Split —
+two trees need the width — and on a narrow screen the panes stack vertically.
 
 ## Toolbar
 

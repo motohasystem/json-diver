@@ -40,6 +40,14 @@
   const $minimapCanvas = document.getElementById("minimap-canvas");
   const $minimapViewport = document.getElementById("minimap-viewport");
   const $toast = document.getElementById("toast");
+  const $treeB = document.getElementById("tree-b");
+  const $inputB = document.getElementById("input-b");
+  const $depthBarB = document.getElementById("depth-bar-b");
+  const $errorB = document.getElementById("error-b");
+  const $btnPasteB = document.getElementById("btn-paste-b");
+  const $btnCopyB = document.getElementById("btn-copy-b");
+  const $btnDownloadB = document.getElementById("btn-download-b");
+  const $btnClearB = document.getElementById("btn-clear-b");
   const $btnSidebar = document.getElementById("btn-sidebar");
   const $sidebarBackdrop = document.getElementById("sidebar-backdrop");
 
@@ -54,13 +62,91 @@
   // ---------- centralized state ----------
 
   const state = {
-    data: null,       // current parsed JSON (single source of truth)
+    data: null,       // pane A's parsed JSON (single source of truth)
+    dataB: null,      // pane B's parsed JSON (Split mode's second document)
     schema: null,     // current parsed schema (added in MVP-3)
-    mode: "view",     // "view" | "edit" | "raw" (was editMode boolean)
+    mode: "view",     // "view" | "edit" | "raw" | "split"
     autoFormat: true, // true: 2-space pretty JSON, false: minified (1 line)
     watchClipboard: false, // auto-load JSON as soon as it lands on the clipboard
     violations: [],   // current schema violations (added in MVP-3)
   };
+
+  // ---------- panes ----------
+
+  // Two documents can be open at once. Pane A is the one everything else is bound
+  // to - the file on disk, the schema, the minimap, Copy/Download/Ctrl+S - and
+  // pane B is a second, self-contained document that Split mode puts beside it.
+  // A zoom modal's tree belongs to pane A's document, so it reports no pane id.
+
+  function paneIdOf(treeEl) {
+    if (treeEl === $tree) return "a";
+    if (treeEl === $treeB) return "b";
+    return null;
+  }
+  function treeOfPane(id) { return id === "b" ? $treeB : $tree; }
+  function mirrorOfPane(id) { return id === "b" ? $inputB : $input; }
+  function depthBarOfPane(id) { return id === "b" ? $depthBarB : $depthBar; }
+  function rootOfPane(id) { return id === "b" ? state.dataB : state.data; }
+  function setRootOfPane(id, value) {
+    if (id === "b") state.dataB = value; else state.data = value;
+  }
+
+  function docRootOf(treeEl) {
+    const id = paneIdOf(treeEl);
+    return id ? rootOfPane(id) : treeEl._jdRoot;
+  }
+  function setDocRoot(treeEl, value) {
+    const id = paneIdOf(treeEl);
+    if (id) setRootOfPane(id, value); else treeEl._jdRoot = value;
+  }
+
+  function refreshPaneButtons(id) {
+    const empty = !mirrorOfPane(id).value.trim();
+    if (id === "b") {
+      $btnCopyB.disabled = empty;
+      $btnDownloadB.disabled = empty;
+    } else {
+      $btnCopy.disabled = empty;
+      $btnDownload.disabled = empty;
+    }
+  }
+
+  // Write the pane's document back out to its mirror textarea and storage.
+  function syncPaneMirror(id) {
+    const root = rootOfPane(id);
+    const text = root === null || root === undefined ? "" : serializeDoc(root);
+    mirrorOfPane(id).value = text;
+    saveToStorageFor(id, text);
+    refreshPaneButtons(id);
+    return text;
+  }
+
+  // Re-render whichever pane a mutation landed in, then persist it.
+  function afterDocChange(treeEl) {
+    const id = paneIdOf(treeEl);
+    if (id === null) { refreshModalPane(treeEl); return; }
+    renderTree(rootOfPane(id), treeEl);
+    syncPaneMirror(id);
+    if (id === "a") { revalidate(); scheduleMinimapRedraw(); }
+    if (state.mode === "split") applyModeToPane(treeEl); // an emptied pane goes back to Raw
+  }
+
+  // A zoom view edits part of pane A's document, so it propagates upwards.
+  function refreshModalPane(treeEl) {
+    const root = treeEl._jdRoot;
+    treeEl.innerHTML = "";
+    const rootNode = renderNode(null, root, true);
+    rootNode.classList.add("root");
+    treeEl.appendChild(rootNode);
+    const { depthBarEl } = paneOf(treeEl);
+    if (depthBarEl) renderDepthBar(depthBarEl, treeEl, root);
+    propagateModalChange(treeEl);
+    const entry = modalStack.find((m) => m.innerTree === treeEl);
+    if (entry && entry.minimap) entry.minimap.redraw();
+    syncPaneMirror("a");
+    revalidate();
+    scheduleMinimapRedraw();
+  }
 
   // ---------- type helpers ----------
 
@@ -375,7 +461,8 @@
     root.classList.add("root");
     container.appendChild(root);
     scheduleMinimapRedraw();
-    if (container === $tree) renderDepthBar($depthBar, $tree, state.data);
+    const paneId = paneIdOf(container);
+    if (paneId) renderDepthBar(depthBarOfPane(paneId), container, value);
   }
 
   // ---------- depth toolbar ----------
@@ -954,7 +1041,7 @@
 
   function attachInlineEdit(valSpan, node, type) {
     valSpan.addEventListener("click", (e) => {
-      if (state.mode !== "edit") return;
+      if (state.mode !== "edit" && state.mode !== "split") return;
       if (valSpan.classList.contains("editing")) return;
       e.stopPropagation();
       hideTooltip();
@@ -1097,28 +1184,28 @@
   function commitPrimitiveEdit(node, newValue, type) {
     const path = parsePath(node);
     const treeEl = node.closest(".tree");
-    const isModal = treeEl && treeEl.classList.contains("modal-tree");
+    if (!treeEl) return;
+    const isModal = treeEl.classList.contains("modal-tree");
     // Replacing a modal's root primitive would orphan closure refs in the
     // outer escaped-link; modals are always opened on object/array roots
     // so this shouldn't happen normally.
     if (isModal && path.length === 0) return;
 
-    History.pushBefore();
+    History.pushBefore([historyPaneOf(treeEl)]);
 
     if (path.length === 0) {
-      state.data = newValue;
+      setDocRoot(treeEl, newValue);
     } else {
-      const rootValue = isModal ? treeEl._jdRoot : state.data;
-      const parent = Path.parent(rootValue, path);
+      const parent = Path.parent(docRootOf(treeEl), path);
       if (parent == null) return;
       parent[Path.last(path)] = newValue;
     }
 
     if (isModal) propagateModalChange(treeEl);
 
-    const text = serializeDoc(state.data);
-    $input.value = text;
-    saveToStorage(text);
+    // The value span is swapped in place below, so only the text mirror needs
+    // syncing here - a full re-render would lose scroll and collapse state.
+    syncPaneMirror(isModal ? "a" : paneIdOf(treeEl));
 
     // In-place replace the val span (keeps scroll, collapse state, focus)
     const row = node.querySelector(":scope > .row");
@@ -1322,7 +1409,7 @@
 
   function closeTopModal() {
     const top = modalStack[modalStack.length - 1];
-    if (top && state.mode === "raw") commitRawEditor(top.innerTree);
+    if (top && (state.mode === "raw" || state.mode === "split")) commitRawEditor(top.innerTree);
     modalStack.pop();
     if (top) {
       top.minimap.destroy();
@@ -1353,12 +1440,15 @@
   }
 
   const STORAGE_KEY = "json-diver:lastInput";
-  function saveToStorage(text) {
+  const STORAGE_KEY_B = "json-diver:lastInputB";
+  function saveToStorageFor(id, text) {
+    const key = id === "b" ? STORAGE_KEY_B : STORAGE_KEY;
     try {
-      if (text && text.trim()) localStorage.setItem(STORAGE_KEY, text);
-      else localStorage.removeItem(STORAGE_KEY);
+      if (text && text.trim()) localStorage.setItem(key, text);
+      else localStorage.removeItem(key);
     } catch (_) { /* storage unavailable */ }
   }
+  function saveToStorage(text) { saveToStorageFor("a", text); }
 
   function parseAndRender(text, opts = {}) {
     const trimmed = text.trim();
@@ -1371,6 +1461,7 @@
       renderDepthBar($depthBar, $tree, state.data);
       if (!opts.preserveHistory) History.reset();
       refreshEmptyState();
+      if (state.mode === "split") applyModeToPane($tree);
       return;
     }
     try {
@@ -1384,12 +1475,84 @@
       revalidate();
       if (!opts.preserveHistory) History.reset();
       refreshEmptyState();
+      if (state.mode === "split") applyModeToPane($tree);
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
       $btnCopy.disabled = true;
     }
   }
+
+  function setErrorB(msg) {
+    if (!msg) { $errorB.hidden = true; $errorB.textContent = ""; return; }
+    $errorB.hidden = false;
+    $errorB.textContent = msg;
+  }
+
+  // Pane B's counterpart to parseAndRender. It owns no schema, minimap or file,
+  // so loading it is just: parse, render, persist.
+  function loadPaneB(text, opts = {}) {
+    const trimmed = (text || "").trim();
+    if (!trimmed) {
+      state.dataB = null;
+      $treeB.innerHTML = "";
+      setErrorB("");
+      syncPaneMirror("b");
+      renderDepthBar($depthBarB, $treeB, null);
+      if (!opts.preserveHistory) History.reset();
+      applyModeToPane($treeB);
+      return true;
+    }
+    let value;
+    try { value = JSON.parse(trimmed); }
+    catch (err) { setErrorB("JSON parse error: " + err.message); return false; }
+    setErrorB("");
+    state.dataB = value;
+    renderTree(value, $treeB);
+    syncPaneMirror("b");
+    applyModeToPane($treeB);
+    return true;
+  }
+
+  $btnPasteB.addEventListener("click", async () => {
+    let text;
+    try { text = await navigator.clipboard.readText(); }
+    catch (err) { showToast(`Paste failed: ${err.message}`); return; }
+    if (!text || !text.trim()) { showToast("Clipboard is empty"); return; }
+    try { JSON.parse(text); }
+    catch (err) { showToast(`Invalid JSON: ${err.message}`); return; }
+    if (state.dataB !== null && state.dataB !== undefined) {
+      if (!confirm("This will replace pane B. Continue?")) return;
+    }
+    History.pushBefore(["b"]);
+    loadPaneB(normalizeText(text), { preserveHistory: true });
+  });
+
+  $btnCopyB.addEventListener("click", async () => {
+    const text = $inputB.value;
+    if (!text.trim()) return;
+    try {
+      Clip.lastCopied = text;
+      await navigator.clipboard.writeText(text);
+      showToast("Copied to clipboard", 1500, "ok");
+    } catch (err) {
+      showToast(`Copy failed: ${err.message}`);
+    }
+  });
+
+  $btnDownloadB.addEventListener("click", () => {
+    const text = $inputB.value;
+    try { JSON.parse(text); } catch (_) { return; }
+    downloadText(text);
+  });
+
+  $btnClearB.addEventListener("click", () => {
+    if (state.dataB !== null && state.dataB !== undefined) {
+      if (!confirm("This will clear pane B. Continue?")) return;
+      History.pushBefore(["b"]);
+    }
+    loadPaneB("", { preserveHistory: true });
+  });
 
   // ---------- Pretty / minified (document text form) ----------
 
@@ -1501,7 +1664,7 @@
     History.pushBefore();
     $input.value = next;
     parseAndRender(next, { preserveHistory: true });
-    if (state.mode === "raw") refreshAllPanes();
+    if (state.mode === "raw" || state.mode === "split") refreshAllPanes();
     showToast("Loaded from clipboard — Ctrl+Z to undo", 2500, "ok");
     return true;
   }
@@ -1614,9 +1777,7 @@
     return `json-diver-${date}-${time}.json`;
   }
 
-  $btnDownload.addEventListener("click", () => {
-    const text = $input.value;
-    try { JSON.parse(text); } catch (_) { return; }
+  function downloadText(text) {
     const blob = new Blob([text], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1628,6 +1789,12 @@
     a.remove();
     URL.revokeObjectURL(url);
     showToast(`Downloaded: ${name}`, 2500, "ok");
+  }
+
+  $btnDownload.addEventListener("click", () => {
+    const text = $input.value;
+    try { JSON.parse(text); } catch (_) { return; }
+    downloadText(text);
   });
 
   // paste anywhere — unless a text field (raw editor, schema box, …) is focused
@@ -1671,8 +1838,11 @@
     document.body.classList.remove("drag-over");
     const dt = e.dataTransfer;
     if (!dt) return;
+    // In Split mode the pane under the pointer decides which document is replaced.
+    const intoB = state.mode === "split" && e.target.closest && e.target.closest("#pane-b");
     if (dt.files && dt.files.length > 0) {
       const text = await dt.files[0].text();
+      if (intoB) { History.pushBefore(["b"]); loadPaneB(text, { preserveHistory: true }); return; }
       $input.value = text;
       parseAndRender(text);
       return;
@@ -1680,6 +1850,7 @@
     const dropped = dt.getData("text");
     if (dropped) {
       const text = normalizeText(dropped);
+      if (intoB) { History.pushBefore(["b"]); loadPaneB(text, { preserveHistory: true }); return; }
       $input.value = text;
       parseAndRender(text);
     }
@@ -1746,17 +1917,18 @@
   // ---------- Edit mode + D&D ----------
 
   const DnD = {
-    source: null,         // { path, node }
-    lastTarget: null,     // { rowEl, position, targetPath }
+    source: null,         // { path, node, tree }
+    lastTarget: null,     // { rowEl, position, targetPath, targetTree }
     schemaCache: new Map(), // per-drag cache for Schema.canPlace results
 
     start(handle, e) {
-      if (state.mode !== "edit") { e.preventDefault(); return; }
+      if (state.mode !== "edit" && state.mode !== "split") { e.preventDefault(); return; }
       const node = handle.closest(".node");
-      if (!node || !node.dataset.path) { e.preventDefault(); return; }
+      const tree = node && node.closest(".tree");
+      if (!node || !tree || !node.dataset.path) { e.preventDefault(); return; }
       const path = JSON.parse(node.dataset.path);
       if (path.length === 0) { e.preventDefault(); return; } // root undraggable
-      DnD.source = { path, node };
+      DnD.source = { path, node, tree };
       DnD.schemaCache.clear();
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("application/x-json-diver-path", JSON.stringify(path));
@@ -1769,21 +1941,35 @@
     hover(rowEl, e) {
       if (!DnD.source) return;
       const targetNode = rowEl.closest(".node");
-      if (!targetNode || targetNode === DnD.source.node) {
+      const targetTree = targetNode && targetNode.closest(".tree");
+      if (!targetNode || !targetTree || targetNode === DnD.source.node) {
         DnD.clearIndicators();
         DnD.lastTarget = null;
         return;
       }
       if (!targetNode.dataset.path) return;
-      const targetPath = JSON.parse(targetNode.dataset.path);
-
-      // Self-containment: cannot drop source into its own descendant
-      if (Path.isPrefix(DnD.source.path, targetPath)) {
+      const sameTree = targetTree === DnD.source.tree;
+      const forbid = (reason) => {
         DnD.clearIndicators();
         rowEl.classList.add("drop-forbidden");
+        if (reason) rowEl.title = reason;
         e.dataTransfer.dropEffect = "none";
         e.preventDefault();
         DnD.lastTarget = null;
+      };
+
+      // Only the two document panes can exchange nodes. A zoom view edits a
+      // string inside pane A, so dragging in or out of one has no meaning.
+      if (!sameTree && (!paneIdOf(targetTree) || !paneIdOf(DnD.source.tree))) {
+        forbid("Nodes can only be dragged between the two document panes");
+        return;
+      }
+
+      const targetPath = JSON.parse(targetNode.dataset.path);
+
+      // Self-containment: cannot drop source into its own descendant
+      if (sameTree && Path.isPrefix(DnD.source.path, targetPath)) {
+        forbid("");
         return;
       }
 
@@ -1795,17 +1981,21 @@
       else if (yPct > 0.75) position = "after";
       else position = "into";
 
+      const targetRoot = docRootOf(targetTree);
+      const sourceRoot = docRootOf(DnD.source.tree);
+
       // "into" requires target to be a container; otherwise fall back to "after"
       if (position === "into") {
-        const tv = Path.get(state.data, targetPath);
+        const tv = targetPath.length === 0 ? targetRoot : Path.get(targetRoot, targetPath);
         const tt = typeOf(tv);
         if (tt !== "object" && tt !== "array") position = "after";
       }
 
       // Compute parents
       const targetParentPath = position === "into" ? targetPath : targetPath.slice(0, -1);
-      const targetParentRef = Path.get(state.data, targetParentPath);
-      const sourceParentRef = Path.parent(state.data, DnD.source.path);
+      const targetParentRef = targetParentPath.length === 0
+        ? targetRoot : Path.get(targetRoot, targetParentPath);
+      const sourceParentRef = Path.parent(sourceRoot, DnD.source.path);
       const sourceKey = Path.last(DnD.source.path);
 
       // Cross-type rule (MVP-2): array element → object requires a key name; forbid for now
@@ -1815,9 +2005,11 @@
         valid = false;
         reason = "Array items have no key, so they cannot move into an object";
       }
-      // Key collision: object → object move where target already has same key
+      // Key collision: object → object move where target already has same key.
+      // Across panes the node keeps its key, so the same rule applies.
       if (
         valid &&
+        targetParentRef !== null && typeof targetParentRef === "object" &&
         !Array.isArray(targetParentRef) &&
         sourceParentRef !== targetParentRef &&
         Object.prototype.hasOwnProperty.call(targetParentRef, sourceKey)
@@ -1827,7 +2019,9 @@
       }
 
       // Schema gate (MVP-4): would this placement increase violations?
-      if (valid && state.schema) {
+      // Only meaningful within pane A's document; a cross-pane drop is checked
+      // on the resulting draft instead (see drop()).
+      if (valid && state.schema && sameTree && paneIdOf(targetTree) === "a") {
         const cacheKey = `${JSON.stringify(targetPath)}|${position}`;
         let allowed;
         if (DnD.schemaCache.has(cacheKey)) {
@@ -1850,19 +2044,23 @@
           position === "into" ? "drop-into" :
           position === "before" ? "drop-line-before" : "drop-line-after";
         rowEl.classList.add(cls);
+        // Mark the receiving pane while dragging across, so the destination is
+        // obvious even when the row indicator is at the edge of vision.
+        if (!sameTree) {
+          const block = targetTree.closest(".tree-block");
+          if (block) block.classList.add("drop-pane");
+        }
         e.dataTransfer.dropEffect = "move";
         e.preventDefault();
-        DnD.lastTarget = { rowEl, position, targetPath };
+        DnD.lastTarget = { rowEl, position, targetPath, targetTree };
       } else {
-        rowEl.classList.add("drop-forbidden");
-        rowEl.title = reason;
-        e.dataTransfer.dropEffect = "none";
-        e.preventDefault();
-        DnD.lastTarget = null;
+        forbid(reason);
       }
     },
 
     clearIndicators() {
+      document.querySelectorAll(".tree-block.drop-pane")
+        .forEach((el) => el.classList.remove("drop-pane"));
       document
         .querySelectorAll(".drop-line-before, .drop-line-after, .drop-into, .drop-forbidden")
         .forEach((el) => {
@@ -1876,37 +2074,52 @@
     drop(e) {
       if (!DnD.source || !DnD.lastTarget) return;
       e.preventDefault();
-      const { position, targetPath } = DnD.lastTarget;
+      const { position, targetPath, targetTree } = DnD.lastTarget;
+      const sourceTree = DnD.source.tree;
 
-      // Two-stage defense: try on a draft first, only commit if schema OK
-      let draft;
-      try { draft = structuredClone(state.data); }
-      catch (_) { draft = JSON.parse(JSON.stringify(state.data)); }
+      // Two-stage defense: try on a draft first, only commit if the schema holds
+      if (targetTree === sourceTree) {
+        const draft = cloneData(docRootOf(targetTree));
+        try {
+          applyMove(draft, DnD.source.path, targetPath, position);
+        } catch (err) {
+          showToast(`Move failed: ${err.message}`);
+          return;
+        }
+        if (!schemaOkFor(targetTree, draft)) return;
 
+        History.pushBefore([historyPaneOf(sourceTree)]);
+        setDocRoot(targetTree, draft);
+        afterDocChange(targetTree);
+        return;
+      }
+
+      // Across panes: lift the node out of one document and into the other.
+      const srcDraft = cloneData(docRootOf(sourceTree));
+      const dstDraft = cloneData(docRootOf(targetTree));
+      const moved = Path.get(srcDraft, DnD.source.path);
+      if (moved === undefined) { showToast("Move failed: source not found"); return; }
+
+      const sourceKey = Path.last(DnD.source.path);
+      const key = keyForDrop(dstDraft, targetPath, position,
+        typeof sourceKey === "string" ? sourceKey : "pasted");
       try {
-        applyMove(draft, DnD.source.path, targetPath, position);
+        applyInsert(dstDraft, targetPath, position, key, moved);
+        Path.removeAt(srcDraft, DnD.source.path);
       } catch (err) {
         showToast(`Move failed: ${err.message}`);
         return;
       }
+      if (!schemaOkFor(targetTree, dstDraft) || !schemaOkFor(sourceTree, srcDraft)) return;
 
-      if (state.schema) {
-        const oldCount = state.violations.length;
-        const newCount = Schema.validate(draft).length;
-        if (newCount > oldCount) {
-          showToast(`Rolled back: schema violations would increase (${oldCount} → ${newCount})`);
-          return;
-        }
-      }
-
-      // Commit (with undo history)
-      History.pushBefore();
-      state.data = draft;
-      const text = serializeDoc(state.data);
-      $input.value = text;
-      saveToStorage(text);
-      renderTree(state.data, $tree);
-      revalidate();
+      const landed = insertedPath(dstDraft, targetPath, position, key);
+      // One entry covering both documents, so a single undo restores both.
+      History.pushBefore([historyPaneOf(sourceTree), historyPaneOf(targetTree)]);
+      setDocRoot(sourceTree, srcDraft);
+      setDocRoot(targetTree, dstDraft);
+      afterDocChange(sourceTree);
+      afterDocChange(targetTree);
+      flashNode(targetTree, landed);
     },
 
     end() {
@@ -1966,29 +2179,6 @@
     throw new Error("parent is not a container");
   }
 
-  // Re-render the pane a mutation landed in, then write the document back out.
-  function refreshPaneAfterMutation(treeEl) {
-    if (treeEl === $tree) {
-      renderTree(state.data, $tree);
-    } else {
-      const root = treeEl._jdRoot;
-      treeEl.innerHTML = "";
-      const rootNode = renderNode(null, root, true);
-      rootNode.classList.add("root");
-      treeEl.appendChild(rootNode);
-      const { depthBarEl } = paneOf(treeEl);
-      if (depthBarEl) renderDepthBar(depthBarEl, treeEl, root);
-      propagateModalChange(treeEl); // writes the change back up into state.data
-      const entry = modalStack.find((m) => m.innerTree === treeEl);
-      if (entry && entry.minimap) entry.minimap.redraw();
-    }
-    const text = serializeDoc(state.data);
-    $input.value = text;
-    saveToStorage(text);
-    revalidate();
-    scheduleMinimapRedraw();
-  }
-
   function insertedPath(root, targetPath, position, key) {
     if (position === "into") {
       const target = targetPath.length === 0 ? root : Path.get(root, targetPath);
@@ -2030,31 +2220,33 @@
   // Apply on a draft first and keep it only if the schema does not get worse -
   // the same two-stage defense drag and drop uses.
   function commitInsert(treeEl, targetPath, position, key, value) {
-    const isModal = treeEl !== $tree;
-    const liveRoot = isModal ? treeEl._jdRoot : state.data;
-    let draft;
-    try { draft = structuredClone(liveRoot); }
-    catch (_) { draft = JSON.parse(JSON.stringify(liveRoot)); }
+    const draft = cloneData(docRootOf(treeEl));
 
     try { applyInsert(draft, targetPath, position, key, value); }
     catch (err) { showToast(`Insert failed: ${err.message}`); return false; }
-
-    // The schema describes the main document, so only that one is checked.
-    if (!isModal && state.schema) {
-      const oldCount = state.violations.length;
-      const newCount = Schema.validate(draft).length;
-      if (newCount > oldCount) {
-        showToast(`Rolled back: schema violations would increase (${oldCount} \u2192 ${newCount})`);
-        return false;
-      }
-    }
+    if (!schemaOkFor(treeEl, draft)) return false;
 
     const landed = insertedPath(draft, targetPath, position, key);
 
-    History.pushBefore();
-    if (isModal) treeEl._jdRoot = draft; else state.data = draft;
-    refreshPaneAfterMutation(treeEl); // rebuilds the pane, so flash after it
+    History.pushBefore([historyPaneOf(treeEl)]);
+    setDocRoot(treeEl, draft);
+    afterDocChange(treeEl); // rebuilds the pane, so flash after it
     flashNode(treeEl, landed);
+    return true;
+  }
+
+  // Which undo bucket an edit in this tree belongs to. A zoom view edits pane A.
+  function historyPaneOf(treeEl) { return paneIdOf(treeEl) || "a"; }
+
+  // The schema describes pane A's document, so only that one is gated.
+  function schemaOkFor(treeEl, draft) {
+    if (!state.schema || paneIdOf(treeEl) !== "a") return true;
+    const oldCount = state.violations.length;
+    const newCount = Schema.validate(draft).length;
+    if (newCount > oldCount) {
+      showToast(`Rolled back: schema violations would increase (${oldCount} \u2192 ${newCount})`);
+      return false;
+    }
     return true;
   }
 
@@ -2077,6 +2269,15 @@
       if (!(`${name}_${i}` in container)) return `${name}_${i}`;
     }
     return name;
+  }
+
+  // The key a dragged node should take in its destination. Arrays need none.
+  function keyForDrop(dstRoot, targetPath, position, preferred) {
+    const container = position === "into"
+      ? (targetPath.length === 0 ? dstRoot : Path.get(dstRoot, targetPath))
+      : Path.parent(dstRoot, targetPath);
+    if (Array.isArray(container)) return null;
+    return freeKey(container, preferred);
   }
 
   async function openPastePopup(node, btn) {
@@ -2205,8 +2406,9 @@
     document.querySelectorAll('.mode-switch .mode-opt[data-mode="view"], .mode-switch .mode-opt[data-mode="edit"]')
       .forEach((opt) => { opt.disabled = empty; });
     if (empty) {
-      if (state.mode !== "raw") setMode("raw");
-    } else if (lastEmpty) {
+      // Split gives pane A its own raw editor, so it does not need forcing out.
+      if (state.mode !== "raw" && state.mode !== "split") setMode("raw");
+    } else if (lastEmpty && state.mode !== "split") {
       setMode("view");
     }
     lastEmpty = empty;
@@ -2214,15 +2416,23 @@
 
   function setMode(newMode) {
     if (newMode === state.mode) return;
-    // Leaving raw mode commits every open raw editor; abort on invalid JSON.
-    if (state.mode === "raw" && newMode !== "raw") {
-      if (!commitAllRawEditors()) { syncSwitches("raw"); return; }
+    // Leaving a mode with open raw editors commits them; abort on invalid JSON.
+    if ((state.mode === "raw" || state.mode === "split") && newMode !== state.mode) {
+      if (!commitAllRawEditors()) { syncSwitches(state.mode); return; }
     }
+    // Two documents side by side already use the whole window; a zoom view on
+    // top of that has nowhere to go.
+    if (newMode === "split") { while (modalStack.length > 0) closeTopModal(); }
+
     state.mode = newMode;
-    document.body.classList.toggle("edit-mode", newMode === "edit");
+    // Split is an editing mode, so it carries the edit affordances too.
+    document.body.classList.toggle("edit-mode", newMode === "edit" || newMode === "split");
     document.body.classList.toggle("raw-mode", newMode === "raw");
+    document.body.classList.toggle("split-mode", newMode === "split");
     syncSwitches(newMode);
     refreshAllPanes();
+    // The layout changed width; let the height fitter and minimap catch up.
+    window.dispatchEvent(new Event("resize"));
   }
 
   // Delegate clicks so dynamically created mode-switches (e.g. inside modals)
@@ -2255,16 +2465,16 @@
   // mirrors that pane's root value. Mode is global, so all panes flip together.
 
   function allTrees() {
-    return [$tree, ...modalStack.map((m) => m.innerTree)];
+    return [$tree, $treeB, ...modalStack.map((m) => m.innerTree)];
   }
 
   function paneOf(treeEl) {
-    const isModal = treeEl !== $tree;
-    const paneEl = isModal ? treeEl.closest(".modal-body") : treeEl.parentElement;
-    const depthBarEl = isModal
-      ? (paneEl && paneEl.querySelector(".depth-bar"))
-      : $depthBar;
-    return { isModal, paneEl, depthBarEl };
+    const id = paneIdOf(treeEl);
+    if (id) {
+      return { isModal: false, paneEl: treeEl.parentElement, depthBarEl: depthBarOfPane(id) };
+    }
+    const paneEl = treeEl.closest(".modal-body");
+    return { isModal: true, paneEl, depthBarEl: paneEl && paneEl.querySelector(".depth-bar") };
   }
 
   function ensureRawEditor(treeEl) {
@@ -2280,12 +2490,23 @@
     return editor;
   }
 
+  // Raw mode turns every pane into text. Split mode keeps trees, except that an
+  // empty pane shows its raw editor - that textarea is how a document gets in.
+  function paneWantsRaw(treeEl) {
+    if (state.mode === "raw") return true;
+    if (state.mode !== "split") return false;
+    const id = paneIdOf(treeEl);
+    if (!id) return false;
+    const root = rootOfPane(id);
+    return root === null || root === undefined;
+  }
+
   function applyModeToPane(treeEl) {
-    const { isModal, paneEl, depthBarEl } = paneOf(treeEl);
+    const { paneEl, depthBarEl } = paneOf(treeEl);
     if (!paneEl) return;
-    if (state.mode === "raw") {
+    if (paneWantsRaw(treeEl)) {
       const editor = ensureRawEditor(treeEl);
-      const root = isModal ? treeEl._jdRoot : state.data;
+      const root = docRootOf(treeEl);
       editor.value = root === null || root === undefined ? "" : serializeDoc(root);
       editor.style.display = "";
       treeEl.style.display = "none";
@@ -2309,39 +2530,18 @@
     const trimmed = editor.value.trim();
     if (trimmed === "") return true; // empty → no-op (use Clear to empty out)
 
-    const isModal = treeEl !== $tree;
     let parsed;
     try { parsed = JSON.parse(trimmed); }
     catch (err) { showToast("Invalid JSON: " + err.message); return false; }
 
-    const current = isModal ? treeEl._jdRoot : state.data;
+    const current = docRootOf(treeEl);
     if (JSON.stringify(parsed) === JSON.stringify(current)) return true; // unchanged
 
-    History.pushBefore();
+    History.pushBefore([historyPaneOf(treeEl)]);
 
-    if (isModal) {
-      treeEl._jdRoot = parsed;
-      treeEl.innerHTML = "";
-      const root = renderNode(null, parsed, true);
-      root.classList.add("root");
-      treeEl.appendChild(root);
-      const { depthBarEl } = paneOf(treeEl);
-      if (depthBarEl) renderDepthBar(depthBarEl, treeEl, parsed);
-      propagateModalChange(treeEl);
-      const entry = modalStack.find((m) => m.innerTree === treeEl);
-      if (entry && entry.minimap) entry.minimap.redraw();
-    } else {
-      state.data = parsed;
-      const text = serializeDoc(parsed);
-      $input.value = text;
-      saveToStorage(text);
-      renderTree(parsed, $tree);
-      $btnDownload.disabled = false;
-      $btnCopy.disabled = false;
-      revalidate();
-      scheduleMinimapRedraw();
-      refreshEmptyState();
-    }
+    setDocRoot(treeEl, parsed);
+    afterDocChange(treeEl);
+    if (paneIdOf(treeEl) === "a") refreshEmptyState();
     return true;
   }
 
@@ -2365,12 +2565,19 @@
     future: [],
     MAX: 50,
 
-    _snapshot() {
-      return { data: cloneData(state.data), text: $input.value };
+    // An entry holds a snapshot per pane it covers. A cross-pane move records
+    // both, so one Ctrl+Z puts the node back where it came from instead of
+    // leaving it in two documents at once.
+    _snapshot(panes) {
+      const snap = {};
+      for (const id of panes) {
+        snap[id] = { data: cloneData(rootOfPane(id)), text: mirrorOfPane(id).value };
+      }
+      return snap;
     },
 
-    pushBefore() {
-      History.past.push(History._snapshot());
+    pushBefore(panes = ["a"]) {
+      History.past.push(History._snapshot(panes));
       if (History.past.length > History.MAX) History.past.shift();
       History.future = [];
       History.updateUI();
@@ -2378,16 +2585,16 @@
 
     undo() {
       if (History.past.length === 0) return undefined;
-      History.future.push(History._snapshot());
       const prev = History.past.pop();
+      History.future.push(History._snapshot(Object.keys(prev)));
       History.updateUI();
       return prev;
     },
 
     redo() {
       if (History.future.length === 0) return undefined;
-      History.past.push(History._snapshot());
       const next = History.future.pop();
+      History.past.push(History._snapshot(Object.keys(next)));
       History.updateUI();
       return next;
     },
@@ -2404,22 +2611,23 @@
     },
   };
 
-  // Apply a stored snapshot to state + UI
-  function commitState(snapshot) {
-    state.data = snapshot.data;
-    $input.value = snapshot.text;
-    setError("");
-    saveToStorage(snapshot.text);
-    if (snapshot.data === null && !snapshot.text.trim()) {
-      $tree.innerHTML = "";
-      $btnDownload.disabled = true;
-      $btnCopy.disabled = true;
-      renderDepthBar($depthBar, $tree, state.data);
-      scheduleMinimapRedraw();
-    } else {
-      renderTree(snapshot.data, $tree);
-      $btnDownload.disabled = false;
-      $btnCopy.disabled = false;
+  // Apply a stored entry (one snapshot per pane it covers) back to state + UI
+  function commitState(entry) {
+    for (const [id, snap] of Object.entries(entry)) {
+      setRootOfPane(id, snap.data);
+      mirrorOfPane(id).value = snap.text;
+      saveToStorageFor(id, snap.text);
+      const treeEl = treeOfPane(id);
+      if (snap.data === null && !snap.text.trim()) {
+        treeEl.innerHTML = "";
+        renderDepthBar(depthBarOfPane(id), treeEl, null);
+      } else {
+        renderTree(snap.data, treeEl);
+      }
+      refreshPaneButtons(id);
+      if (id === "a") { setError(""); scheduleMinimapRedraw(); }
+      else setErrorB("");
+      if (state.mode === "split") applyModeToPane(treeEl);
     }
     revalidate();
     refreshEmptyState();
@@ -2461,6 +2669,7 @@
     if (k === "v") setMode("view");
     else if (k === "e") setMode("edit");
     else if (k === "r") setMode("raw");
+    else if (k === "s") setMode("split");
   });
 
   // ---------- Schema validation wiring ----------
@@ -2566,22 +2775,25 @@
     schemaTimer = setTimeout(() => applySchemaInput($schemaInput.value), 120);
   });
 
-  // Delegated listeners on the main tree only (modals not draggable)
-  $tree.addEventListener("dragstart", (e) => {
-    const handle = e.target.closest && e.target.closest(".handle");
-    if (!handle) return;
-    DnD.start(handle, e);
-  });
-  $tree.addEventListener("dragover", (e) => {
-    const row = e.target.closest && e.target.closest(".row");
-    if (!row) return;
-    DnD.hover(row, e);
-  });
-  $tree.addEventListener("drop", (e) => DnD.drop(e));
-  $tree.addEventListener("dragleave", (e) => {
-    if (e.relatedTarget && $tree.contains(e.relatedTarget)) return;
-    DnD.clearIndicators();
-  });
+  // Delegated listeners per document pane. Both are wired the same way, which is
+  // what lets a node be dragged from one pane into the other.
+  for (const treeEl of [$tree, $treeB]) {
+    treeEl.addEventListener("dragstart", (e) => {
+      const handle = e.target.closest && e.target.closest(".handle");
+      if (!handle) return;
+      DnD.start(handle, e);
+    });
+    treeEl.addEventListener("dragover", (e) => {
+      const row = e.target.closest && e.target.closest(".row");
+      if (!row) return;
+      DnD.hover(row, e);
+    });
+    treeEl.addEventListener("drop", (e) => DnD.drop(e));
+    treeEl.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget && treeEl.contains(e.relatedTarget)) return;
+      DnD.clearIndicators();
+    });
+  }
   document.addEventListener("dragend", () => DnD.end());
 
   // ---------- minimap (reusable factory) ----------
@@ -2858,6 +3070,13 @@
       parseAndRender(saved);
     }
   } catch (_) { /* storage unavailable */ }
+
+  // ... and pane B's document, which only becomes visible in Split mode
+  try {
+    const savedB = localStorage.getItem(STORAGE_KEY_B);
+    if (savedB) loadPaneB(savedB);
+  } catch (_) { /* storage unavailable */ }
+  refreshPaneButtons("b");
 
   // No document → start in Raw mode (the only input surface) with View/Edit off.
   refreshEmptyState();

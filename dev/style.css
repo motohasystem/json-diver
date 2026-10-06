@@ -148,7 +148,8 @@ main { padding: 12px 16px; }
   top: 2px;
   bottom: 2px;
   left: 2px;
-  width: calc((100% - 4px) / 3);
+  /* Modal switches have 3 options, the main one 4 (see --mode-count). */
+  width: calc((100% - 4px) / var(--mode-count, 3));
   background: var(--accent);
   border-radius: 12px;
   transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
@@ -159,6 +160,9 @@ main { padding: 12px 16px; }
 }
 .mode-switch[data-mode="raw"] .mode-thumb {
   transform: translateX(200%);
+}
+.mode-switch[data-mode="split"] .mode-thumb {
+  transform: translateX(300%);
 }
 .mode-switch .mode-opt {
   position: relative;
@@ -1118,4 +1122,57 @@ body.edit-mode .row-act-paste { display: inline-block; }
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .modal-sidebar { transition: none; }
+}
+
+/* ---------- Split: two documents side by side ---------- */
+
+/* Pane B only exists in Split mode; A keeps the whole width otherwise. */
+#pane-b { display: none; }
+.pane-label { display: none; }
+
+body.split-mode #pane-b { display: flex; }
+body.split-mode #pane-a,
+body.split-mode #pane-b { flex: 1 1 0; min-width: 0; }
+/* The map, legend and schema panel would leave too little room for two trees. */
+body.split-mode .sidebar,
+body.split-mode #btn-sidebar { display: none; }
+
+body.split-mode .pane-label {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 1px 7px;
+  letter-spacing: 0.08em;
+}
+/* Pane A's toolbar wraps to two rows in half the width while B's needs one, which
+   would start the two trees at different heights. Reserve the taller height for
+   both so the depth bars and rows line up across the seam. */
+body.split-mode .tree-toolbar { min-height: 60px; align-content: flex-start; }
+
+/* A seam between the panes, and a little breathing room for the right one. */
+body.split-mode #pane-b {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+
+/* The pane a drag would land in, highlighted while dragging across. */
+body.dnd-active .tree-block.drop-pane .tree-scroll {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (max-width: 760px) {
+  /* Two trees do not fit on a phone: stack them instead. */
+  body.split-mode .content { flex-direction: column; }
+  body.split-mode #pane-b {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 10px;
+  }
 }
