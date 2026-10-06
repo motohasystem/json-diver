@@ -23,9 +23,10 @@ build serves both, only the listing text differs.
 | `03-escaped-json-zoom.png` | Escaped JSON zoomed into its own window, with a further escaped value inside |
 | `04-schema-validation.png` | JSON Schema validation: violating rows highlighted, ⚠ 3 badge in the toolbar |
 | `05-insert-from-clipboard.png` | Inserting a node from the clipboard: the popup with its before/inside/after choice |
-| `06-raw-mode.png` | Raw mode — the JSON as editable text |
+| `06-split-two-documents.png` | Split mode mid-drag: a node on its way from the left document into the right one |
+| `07-raw-mode.png` | Raw mode — the JSON as editable text |
 
-All six are 1366×768 PNG, above the Store's minimum for PC screenshots.
+All seven are 1366×768 PNG, above the Store's minimum for PC screenshots.
 
 **How they were produced, and what to check.** They were captured from the shipping
 app at <https://json.kintoys.app> with the desktop shell's DOM applied — the topbar
@@ -35,7 +36,11 @@ captures of the installed `.msix`. If you would rather ship literal desktop capt
 take them from the installed app at 1366×768 or larger and replace the files; the
 listing text does not depend on them.
 
-The version badge in the sidebar reads `v0.6.0`. Re-capture when that number changes
+The Split shot is taken mid-drag by dispatching the app's own `dragstart` / `dragover`
+events, so the drop indicator and the receiving-pane outline are the real ones the app
+renders — a plain mouse-down does not start an HTML5 drag in a headless browser.
+
+The version badge in the sidebar reads `v0.7.0`. Re-capture when that number changes
 so the screenshots do not advertise an older build:
 
 ```bash

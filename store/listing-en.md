@@ -44,14 +44,24 @@ object shows a miniature of its contents without expanding it, and the minimap i
 sidebar turns the entire document into a colour-coded overview you can click to
 navigate.
 
-**Edit in place, or as text**
+**Edit in place, as text, or two documents at once**
 
-Three modes, one switch:
+Four modes, one switch:
 
 - **View** — read-only browsing, copying and zooming
 - **Edit** — click a value to change it inline; drag a row by its handle to move a
   node before, inside or after another one
 - **Raw** — the JSON as text, for when it is simply faster to type
+- **Split** — a second document beside the first, with nodes draggable between them
+
+**Split: move nodes between two documents**
+
+Split opens a second document beside the one you have open. Drag a node by its handle
+from one pane into the other and it moves there — out of the pane it came from, into
+the position you dropped it, keeping its key. A key already taken on the far side is
+refused rather than overwritten, the node that landed is highlighted, and one Ctrl+Z
+puts a cross-pane move back on both sides at once. It is how you lift a block out of an
+API response and drop it into a config file without a round trip through an editor.
 
 Editing also reaches across documents. Copy JSON anywhere — a node from another
 window, a fragment from a chat message — press **+** on the row you want it next to,
@@ -115,14 +125,15 @@ https://github.com/motohasystem/json-diver
 9. Move nodes by drag and drop — insert before, move inside, or insert after
 10. Undo and redo across every kind of edit (Ctrl+Z / Ctrl+Shift+Z)
 11. Raw mode for editing the JSON directly as text
-12. Pretty toggle: 2-space indentation or minified to one line, everywhere at once
-13. Validates against a JSON Schema as you type, highlighting violations in the tree,
+12. Split mode: two documents side by side, with nodes draggable from one to the other
+13. Pretty toggle: 2-space indentation or minified to one line, everywhere at once
+14. Validates against a JSON Schema as you type, highlighting violations in the tree,
     and refuses edits that would introduce new ones
-14. Inserts JSON from the clipboard as a new node, before, inside or after any row
-15. Clipboard watch: JSON copied in any application is loaded automatically
-16. Opens `.json` files on double-click once the file type is associated
-17. Ctrl+S saves back over the original file as UTF-8 without a BOM
-18. Opens each file in its own window; Ctrl+N for a new empty one
+15. Inserts JSON from the clipboard as a new node, before, inside or after any row
+16. Clipboard watch: JSON copied in any application is loaded automatically
+17. Opens `.json` files on double-click once the file type is associated
+18. Ctrl+S saves back over the original file as UTF-8 without a BOM; each file opens
+    in its own window, and Ctrl+N gives you an empty one
 19. Copies any node — or the whole document — to the clipboard in one click
 20. Works fully offline: no account, no telemetry, nothing leaves the device
 
