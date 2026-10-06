@@ -35,6 +35,28 @@ HOW TO TEST FILE HANDLING
 4. Ctrl+N opens an empty second window. Opening another .json also opens a new
    window in the same process.
 
+HOW TO TEST SPLIT (two documents, new in 0.7.0)
+1. With a document loaded, press "Split" on the View / Edit / Raw / Split switch at
+   the top right (or press the "s" key). The window divides into pane A (left, the
+   document you already had) and pane B (right, empty).
+2. Pane B shows a text editor because it is empty. Paste or type any JSON into it -
+   for example {"env":"production","features":{"beta":false}} - then click anywhere
+   outside the editor. Pane B renders it as its own tree.
+3. Drag a node from pane A into pane B: press and hold the "⋮⋮" handle at the start
+   of any row in pane A, drag it over a row in pane B, and release. Dropping on the
+   top quarter of a row inserts before it, the middle puts it inside, the bottom
+   quarter inserts after it. The node moves: it disappears from pane A and is
+   highlighted where it landed in pane B.
+4. Press Ctrl+Z once. Both panes return to their previous state together.
+5. Dragging also works the other way, and within a single pane.
+
+HOW TO TEST INSERTING FROM THE CLIPBOARD (new in 0.7.0)
+1. Switch to Edit (or Split) mode and copy some JSON, e.g. {"sku":"A-1","qty":2}.
+2. Hover any row and press the "+" button that appears on it. A popup shows what is
+   on the clipboard and offers Before / Inside / After; inserting into an object asks
+   for a key. Choose one and the node is inserted and highlighted.
+3. Ctrl+Z undoes it.
+
 ABOUT THE "Watch" BUTTON (clipboard)
 The toolbar has a "Watch" toggle, OFF by default and off on first run. When the user
 turns it on, the app watches the Windows clipboard so that JSON copied in any
@@ -92,6 +114,28 @@ https://github.com/motohasystem/json-diver
    表示されます。
 4. Ctrl+N で空の新規ウィンドウが開きます。別の .json を開いた場合も、同一プロセス
    内に新しいウィンドウが開きます。
+
+Split（2 画面編集、0.7.0 の新機能）の確認手順
+1. 文書を読み込んだ状態で、右上の View / Edit / Raw / Split スイッチの「Split」を
+   押します（「s」キーでも切り替わります）。画面がペイン A（左：それまでの文書）と
+   ペイン B（右：空）に分かれます。
+2. ペイン B は空なのでテキストエディタが表示されます。任意の JSON を貼り付けるか
+   入力し（例: {"env":"production","features":{"beta":false}}）、エディタの外を
+   クリックしてください。ペイン B が独立したツリーとして描画されます。
+3. ペイン A のノードをペイン B へドラッグします。ペイン A の任意の行の先頭にある
+   「⋮⋮」ハンドルを掴み、ペイン B の行の上まで運んで離してください。行の上端 1/4 に
+   落とすと前に挿入、中央で中に入れる、下端 1/4 で後ろに挿入です。ノードは「移動」
+   するので、ペイン A から消え、ペイン B の着地点がハイライトされます。
+4. Ctrl+Z を 1 回押すと、両方のペインが同時に元の状態へ戻ります。
+5. 逆方向（B → A）も、同一ペイン内の移動も同じ操作です。
+
+クリップボードからの挿入（0.7.0 の新機能）の確認手順
+1. Edit（または Split）モードにして、任意の JSON をコピーします
+   （例: {"sku":"A-1","qty":2}）。
+2. 任意の行にホバーすると現れる「+」ボタンを押します。クリップボードの内容と
+   Before / Inside / After の選択肢がポップアップで出ます（オブジェクトへの挿入は
+   キーを尋ねます）。いずれかを選ぶとノードが挿入され、ハイライトされます。
+3. Ctrl+Z で取り消せます。
 
 「Watch」ボタン（クリップボード）について
 ツールバーの「Watch」トグルは既定で OFF、初回起動時も OFF です。ユーザーが ON に
