@@ -20,8 +20,9 @@ HOW TO TEST (fastest path, no file needed)
    window opens showing that escaped JSON as a full tree. Press Esc to close it.
 4. Click the numbered buttons in the bar above the tree to expand/collapse the
    document by depth.
-5. Switch the View / Edit / Raw selector at the top right. In Edit mode, click any
-   value to edit it inline; Ctrl+Z undoes it. In Raw mode the JSON is shown as text.
+5. Switch the View / Edit / Raw / Split selector at the top right. In Edit mode,
+   click any value to edit it inline; Ctrl+Z undoes it. In Raw mode the JSON is shown
+   as text. Split is covered separately below.
 
 HOW TO TEST FILE HANDLING
 1. Save the following as sample.json anywhere:
@@ -100,8 +101,9 @@ https://github.com/motohasystem/json-diver
    します。エスケープされた JSON が完全なツリーとして別ウィンドウで開きます。
    Esc で閉じます。
 4. ツリー上部のバーにある数字付きボタンで、深さごとに開閉できます。
-5. 右上の View / Edit / Raw を切り替えます。Edit では値をクリックしてその場で編集
-   でき、Ctrl+Z で取り消せます。Raw では JSON をテキストとして表示します。
+5. 右上の View / Edit / Raw / Split を切り替えます。Edit では値をクリックして
+   その場で編集でき、Ctrl+Z で取り消せます。Raw では JSON をテキストとして表示
+   します。Split は後述の手順を参照してください。
 
 ファイル操作の確認手順
 1. 次の内容を sample.json として任意の場所に保存します。
