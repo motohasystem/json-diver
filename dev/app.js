@@ -49,6 +49,8 @@
   const $btnDownloadB = document.getElementById("btn-download-b");
   const $btnClearB = document.getElementById("btn-clear-b");
   const $btnSidebar = document.getElementById("btn-sidebar");
+  const $btnDiff = document.getElementById("btn-diff");
+  const $diffCounts = document.getElementById("diff-counts");
   const $sidebarBackdrop = document.getElementById("sidebar-backdrop");
 
   function showToast(msg, ms = 4000, type = "error") {
@@ -68,6 +70,7 @@
     mode: "view",     // "view" | "edit" | "raw" | "split"
     autoFormat: true, // true: 2-space pretty JSON, false: minified (1 line)
     watchClipboard: false, // auto-load JSON as soon as it lands on the clipboard
+    diff: false,      // Split mode: mark what differs between pane A and pane B
     violations: [],   // current schema violations (added in MVP-3)
   };
 
@@ -129,6 +132,7 @@
     syncPaneMirror(id);
     if (id === "a") { revalidate(); scheduleMinimapRedraw(); }
     if (state.mode === "split") applyModeToPane(treeEl); // an emptied pane goes back to Raw
+    refreshDiff();
   }
 
   // A zoom view edits part of pane A's document, so it propagates upwards.
@@ -1223,6 +1227,7 @@
     }
     revalidate();
     scheduleMinimapRedraw();
+    refreshDiff();
   }
 
   // After mutating a value inside a modal tree, re-stringify each modal's
@@ -1476,6 +1481,7 @@
       if (!opts.preserveHistory) History.reset();
       refreshEmptyState();
       if (state.mode === "split") applyModeToPane($tree);
+      refreshDiff();
     } catch (err) {
       setError("JSON parse error: " + err.message);
       $btnDownload.disabled = true;
@@ -1511,6 +1517,7 @@
     renderTree(value, $treeB);
     syncPaneMirror("b");
     applyModeToPane($treeB);
+    refreshDiff();
     return true;
   }
 
@@ -2412,6 +2419,7 @@
       setMode("view");
     }
     lastEmpty = empty;
+    refreshDiff();
   }
 
   function setMode(newMode) {
@@ -2431,6 +2439,7 @@
     document.body.classList.toggle("split-mode", newMode === "split");
     syncSwitches(newMode);
     refreshAllPanes();
+    refreshDiff();
     // The layout changed width; let the height fitter and minimap catch up.
     window.dispatchEvent(new Event("resize"));
   }
@@ -2631,6 +2640,7 @@
     }
     revalidate();
     refreshEmptyState();
+    refreshDiff();
   }
 
   $btnUndo.addEventListener("click", () => {
@@ -2989,6 +2999,157 @@
 
   function scheduleMinimapRedraw() { mainMinimap.redraw(); }
 
+  // ---------- Diff between the two Split panes ----------
+
+  // Classifies every node of both documents as added / removed / changed, keyed by
+  // the same path string the rows carry in data-path. Arrays are matched with an
+  // LCS rather than by index: inserting one element at the front would otherwise
+  // report every element after it as changed, which is noise, not a diff.
+  const STORAGE_KEY_DIFF = "json-diver:diff";
+  // 1000x1000 elements of Uint32 is ~4 MB and a few tens of ms, which is affordable
+  // on every edit. Past that, pair up by index instead - cruder, but bounded.
+  const DIFF_LCS_CELL_CAP = 1000000;
+
+  function lcsOps(as, bs) {
+    const n = as.length, m = bs.length;
+    const ops = [];
+    if (n * m > DIFF_LCS_CELL_CAP) {         // too big to pair up properly
+      const common = Math.min(n, m);
+      for (let k = 0; k < common; k++) ops.push(["pair", k, k]);
+      for (let k = common; k < n; k++) ops.push(["del", k, -1]);
+      for (let k = common; k < m; k++) ops.push(["add", -1, k]);
+      return ops;
+    }
+    const dp = [];
+    for (let i = 0; i <= n; i++) dp.push(new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = as[i] === bs[j]
+          ? dp[i + 1][j + 1] + 1
+          : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (as[i] === bs[j]) { ops.push(["keep", i, j]); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push(["del", i++, -1]); }
+      else { ops.push(["add", -1, j++]); }
+    }
+    while (i < n) ops.push(["del", i++, -1]);
+    while (j < m) ops.push(["add", -1, j++]);
+    return ops;
+  }
+
+  function diffDocs(aRoot, bRoot) {
+    const a = new Map(), b = new Map();
+    let added = 0, removed = 0, changed = 0;
+    const key = (path) => JSON.stringify(path);
+    const ser = (v) => { try { return JSON.stringify(v); } catch (_) { return String(v); } };
+
+    const markAdded = (path) => { b.set(key(path), "added"); added++; };
+    const markRemoved = (path) => { a.set(key(path), "removed"); removed++; };
+    const markChanged = (ap, bp) => {
+      a.set(key(ap), "changed"); b.set(key(bp), "changed"); changed++;
+    };
+
+    function walk(av, bv, ap, bp) {
+      const at = typeOf(av), bt = typeOf(bv);
+      if (at !== bt) { markChanged(ap, bp); return; }
+
+      if (at === "object") {
+        for (const k of Object.keys(av)) {
+          if (!Object.prototype.hasOwnProperty.call(bv, k)) markRemoved([...ap, k]);
+          else walk(av[k], bv[k], [...ap, k], [...bp, k]);
+        }
+        for (const k of Object.keys(bv)) {
+          if (!Object.prototype.hasOwnProperty.call(av, k)) markAdded([...bp, k]);
+        }
+        return;
+      }
+
+      if (at === "array") {
+        const ops = lcsOps(av.map(ser), bv.map(ser));
+        // A run of deletions followed by insertions is usually the same elements
+        // edited in place, so pair them up and recurse instead of reporting both.
+        let pendingDel = [], pendingAdd = [];
+        const flush = () => {
+          const paired = Math.min(pendingDel.length, pendingAdd.length);
+          for (let k = 0; k < paired; k++) {
+            walk(av[pendingDel[k]], bv[pendingAdd[k]],
+                 [...ap, pendingDel[k]], [...bp, pendingAdd[k]]);
+          }
+          for (let k = paired; k < pendingDel.length; k++) markRemoved([...ap, pendingDel[k]]);
+          for (let k = paired; k < pendingAdd.length; k++) markAdded([...bp, pendingAdd[k]]);
+          pendingDel = []; pendingAdd = [];
+        };
+        for (const [op, ai, bi] of ops) {
+          if (op === "keep") { flush(); continue; }
+          if (op === "pair") { flush(); walk(av[ai], bv[bi], [...ap, ai], [...bp, bi]); continue; }
+          if (op === "del") pendingDel.push(ai); else pendingAdd.push(bi);
+        }
+        flush();
+        return;
+      }
+
+      if (av !== bv) markChanged(ap, bp);
+    }
+
+    if (aRoot === null || aRoot === undefined || bRoot === null || bRoot === undefined) {
+      return { a, b, added, removed, changed, ready: false };
+    }
+    walk(aRoot, bRoot, [], []);
+    return { a, b, added, removed, changed, ready: true };
+  }
+
+  function clearDiffMarks() {
+    document.querySelectorAll(".row.diff-added, .row.diff-removed, .row.diff-changed")
+      .forEach((row) => row.classList.remove("diff-added", "diff-removed", "diff-changed"));
+  }
+
+  function paintDiff(treeEl, marks) {
+    for (const node of treeEl.querySelectorAll(".node[data-path]")) {
+      const kind = marks.get(node.dataset.path);
+      if (!kind) continue;
+      const row = node.querySelector(":scope > .row");
+      if (row) row.classList.add(`diff-${kind}`);
+    }
+  }
+
+  // Recomputed after every edit: the point of having it live in Split is that the
+  // marks shrink as the documents are brought together.
+  function refreshDiff() {
+    clearDiffMarks();
+    const on = state.diff && state.mode === "split";
+    $diffCounts.hidden = !on;
+    if (!on) return;
+    const r = diffDocs(rootOfPane("a"), rootOfPane("b"));
+    if (!r.ready) {
+      $diffCounts.innerHTML = '<span class="d-same">load both panes</span>';
+      return;
+    }
+    paintDiff($tree, r.a);
+    paintDiff($treeB, r.b);
+    $diffCounts.innerHTML = (r.added + r.removed + r.changed === 0)
+      ? '<span class="d-same">identical</span>'
+      : `<span class="d-add">+${r.added}</span>` +
+        `<span class="d-del">\u2212${r.removed}</span>` +
+        `<span class="d-chg">~${r.changed}</span>`;
+  }
+
+  function setDiff(on) {
+    state.diff = !!on;
+    $btnDiff.classList.toggle("active", state.diff);
+    $btnDiff.setAttribute("aria-pressed", String(state.diff));
+    $btnDiff.title = state.diff
+      ? "Comparing the two documents \u2014 click to stop"
+      : "Compare the two documents";
+    try { localStorage.setItem(STORAGE_KEY_DIFF, state.diff ? "1" : "0"); }
+    catch (_) { /* storage unavailable */ }
+    refreshDiff();
+  }
+
+  $btnDiff.addEventListener("click", () => setDiff(!state.diff));
+
   // ---------- Side panel drawer (narrow screens) ----------
 
   // On a phone the sidebar would eat the width the tree needs, so there it lives
@@ -3044,6 +3205,10 @@
     $input.value = text;
     parseAndRender(text);
   });
+
+  // Restore the Diff preference (default: off); it only shows in Split mode
+  try { setDiff(localStorage.getItem(STORAGE_KEY_DIFF) === "1"); }
+  catch (_) { setDiff(false); }
 
   // Restore the Pretty preference (default: on)
   try {

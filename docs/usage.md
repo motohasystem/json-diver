@@ -139,6 +139,24 @@ API response and into a config file.
   Download, Clear
 - Pane B is remembered between sessions, and stays loaded when you leave Split
 
+### Comparing the two panes
+
+**Diff** in the toolbar (Split only) marks what differs between the two documents:
+
+- **+** green on a row that exists only in pane B
+- **−** red on a row that exists only in pane A
+- **~** amber on a row that exists in both with a different value
+- The toolbar shows the tally, e.g. `+2 −1 ~3`, or `identical`
+
+Only the rows that actually differ are marked: a change deep inside an object leaves
+its parents and siblings untouched. Arrays are matched by content rather than by
+position, so inserting one element at the front of a list is reported as a single
+addition, not as a change to every element after it.
+
+The comparison stays live while you edit. Fix a value, or drag a node from one pane to
+the other, and the marks and the tally update immediately — so you can work until it
+reads `identical`.
+
 What stays with pane A: the file on disk (**Ctrl+S** in the desktop edition), the JSON
 Schema, the minimap and the clipboard **Watch**. The side panel is hidden in Split —
 two trees need the width — and on a narrow screen the panes stack vertically.
@@ -150,6 +168,7 @@ two trees need the width — and on a narrow screen the panes stack vertically.
 | **Sample** | Load demo JSON (includes escaped JSON and a large array) |
 | **Paste** | Load the contents of the clipboard |
 | **Watch** | Clipboard watch (highlighted = on; off by default). While on, JSON copied anywhere is loaded automatically — see [Clipboard watch](#clipboard-watch) for what each edition can do |
+| **Diff** | Split mode only: marks what differs between the two panes (+ added, − removed, ~ changed) and shows the tally. Updates as you edit |
 | **Pretty** | Toggle that decides the JSON text form (highlighted = on; on by default, stored in the browser). ON = 2-space pretty print, OFF = minified to one line. It applies to the Raw view, pastes/drops, Copy and Download alike, and flipping it re-formats the current document immediately |
 | **Copy** | Copy the whole JSON to the clipboard |
 | **Download** | Download as `json-diver-YYYYMMDD-HHMMSS.json` |

@@ -1176,3 +1176,41 @@ body.dnd-active .tree-block.drop-pane .tree-scroll {
     padding-top: 10px;
   }
 }
+
+/* ---------- Diff (Split mode only) ---------- */
+
+#btn-diff, .diff-counts { display: none; }
+body.split-mode #btn-diff { display: inline-block; }
+body.split-mode .diff-counts { display: inline-flex; gap: 10px; }
+
+.diff-counts {
+  font-family: var(--mono);
+  font-size: 12px;
+  align-items: center;
+  letter-spacing: 0.02em;
+}
+.diff-counts .d-add { color: var(--ok); }
+.diff-counts .d-del { color: var(--err); }
+.diff-counts .d-chg { color: var(--number); }
+.diff-counts .d-same { color: var(--fg-dim); }
+
+/* The left inset bar is taken by schema violations, so diff speaks through a
+   leading glyph plus a wash - a row can be both at once and stay readable. */
+.row.diff-added::before,
+.row.diff-removed::before,
+.row.diff-changed::before {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  width: 11px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.row.diff-added::before   { content: "+"; color: var(--ok); }
+.row.diff-removed::before { content: "\2212"; color: var(--err); }
+.row.diff-changed::before { content: "~"; color: var(--number); }
+
+/* Wins over --row-tint, same as hover and violations do. */
+.row.diff-added   { background: color-mix(in srgb, var(--ok)     18%, transparent); }
+.row.diff-removed { background: color-mix(in srgb, var(--err)    18%, transparent); }
+.row.diff-changed { background: color-mix(in srgb, var(--number) 18%, transparent); }
