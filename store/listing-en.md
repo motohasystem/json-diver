@@ -112,6 +112,29 @@ https://github.com/motohasystem/json-diver
 
 ---
 
+## What's new in this version (max 1,500 characters / optional)
+
+Goes in Partner Center's "What's new in this version" field. The field only appears
+in a new submission draft, so if you cannot find it, these lines work just as well at
+the top of the description — it is an optional field and the submission goes through
+without it.
+
+```
+v0.7.0 — two JSON documents, side by side.
+
+- Split mode: open a second document beside the first and drag nodes from one into
+  the other. The node that moved is highlighted, and one Ctrl+Z puts both documents
+  back.
+- Insert from the clipboard: press + on any row to drop copied JSON before, inside or
+  after it. Inserting into an object asks for a key.
+- Every row now carries a faint wash in its type colour, matching the minimap stripes.
+- Narrow the window and the side panel tucks away, reachable from a Panel button. The
+  minimap takes touch: drag a finger down it to scroll.
+- Row buttons now have tooltips saying what the click will do.
+```
+
+---
+
 ## App features (max 20 items)
 
 1. Renders JSON as a collapsible tree with per-type icons and child counts
