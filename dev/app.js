@@ -2422,6 +2422,19 @@
     refreshDiff();
   }
 
+  // The mode switch, Undo/Redo and Diff belong to the window, not to one document.
+  // Outside Split they sit in the single toolbar; in Split they would squeeze pane
+  // A into two rows and push its tree 44px below pane B's, so they move up into a
+  // row of their own.
+  const $globalActions = document.getElementById("global-actions");
+  function placeModeActions(forSplit) {
+    const bar = document.querySelector("#pane-a .tree-toolbar");
+    const actions = document.querySelector(".mode-actions");
+    if (!bar || !actions) return;
+    const target = forSplit ? $globalActions : bar;
+    if (actions.parentElement !== target) target.appendChild(actions);
+  }
+
   function setMode(newMode) {
     if (newMode === state.mode) return;
     // Leaving a mode with open raw editors commits them; abort on invalid JSON.
@@ -2437,6 +2450,7 @@
     document.body.classList.toggle("edit-mode", newMode === "edit" || newMode === "split");
     document.body.classList.toggle("raw-mode", newMode === "raw");
     document.body.classList.toggle("split-mode", newMode === "split");
+    placeModeActions(newMode === "split");
     syncSwitches(newMode);
     refreshAllPanes();
     refreshDiff();

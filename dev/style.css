@@ -1148,10 +1148,18 @@ body.split-mode .pane-label {
   padding: 1px 7px;
   letter-spacing: 0.08em;
 }
-/* Pane A's toolbar wraps to two rows in half the width while B's needs one, which
-   would start the two trees at different heights. Reserve the taller height for
-   both so the depth bars and rows line up across the seam. */
-body.split-mode .tree-toolbar { min-height: 60px; align-content: flex-start; }
+/* In Split the mode switch, history and Diff move out of pane A into their own
+   full-width row (see #global-actions), which leaves both pane toolbars with just
+   their document actions - same height, so the two trees line up. */
+.global-actions { display: none; }
+body.split-mode .global-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 
 /* A seam between the panes, and a little breathing room for the right one. */
 body.split-mode #pane-b {
