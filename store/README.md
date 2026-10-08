@@ -10,6 +10,9 @@ Everything Partner Center asks for, ready to paste or upload.
 | `restricted-capability-runfulltrust.md` | 制限付き機能 (runFullTrust) の使用承認の申請理由 |
 | `logo-300.png` | ストア ロゴ 300×300 |
 | `screenshots/*.png` | スクリーンショット (PC) — 1366×768 |
+| `trailer-thumbnail-1920x1080.png` | トレーラーのサムネイル (必須) |
+| `hero-1920x1080.png` | 16:9 スーパーヒーローアート |
+| （リポジトリ外） `work/JSON-Diver-trailer-v0.7.0.mp4` | トレーラー本体 — 大きいので git には入れていない |
 
 Two languages are listed because a ja + en-US pair widens search coverage: the same
 build serves both, only the listing text differs.
@@ -46,6 +49,29 @@ so the screenshots do not advertise an older build:
 ```bash
 node shots.mjs   # see the session scratchpad, or re-run the same Playwright steps
 ```
+
+## Trailer
+
+`work/JSON-Diver-trailer-v0.7.0.mp4` — 53.0s, 1920×1080, H.264 High / yuv420p, silent
+AAC-LC stereo 48 kHz, closed GOP 12, moov atom first. Within every Store requirement.
+
+Title to enter alongside it (max 255 chars):
+
+```
+JSON Diver — dive into JSON that wasn't written to be read
+```
+
+`trailer-thumbnail-1920x1080.png` is the required still, taken from the zoom scene.
+
+`hero-1920x1080.png` is the 16:9 super hero art. The trailer only appears at the top
+of the listing when this image is present. Store rules for it: no text, no app UI,
+nothing important in the bottom third (a gradient may be laid over it), key detail
+centred — hence the abstract composition rather than a screenshot.
+
+Both the trailer and the hero art are generated, not hand-edited:
+`work/record-trailer.mjs` drives the live app and bakes the captions in as DOM
+overlays; `work/render-hero.mjs` renders the artwork as SVG. Re-run either after a
+UI change.
 
 ## Before uploading
 
