@@ -17,6 +17,10 @@ hundreds of lines deep, and with more JSON escaped as strings inside it.
 
 ## Description (max 10,000 characters)
 
+This field is plain text. Markdown is not rendered, so no markup is used here, and no
+URL either — the docs advise against URLs in the description, and links belong in the
+Website field on the Properties page.
+
 JSON Diver is a viewer and editor for JSON that you have to read, not JSON you
 carefully wrote yourself — API responses, export dumps, log payloads, config files
 someone minified two years ago.
@@ -26,7 +30,7 @@ than something you reconstruct by counting brackets. Open and close by depth, ju
 around with a minimap, and read strings that are themselves JSON without ever
 decoding an escape by hand.
 
-**Dive into escaped JSON**
+Dive into escaped JSON
 
 The feature JSON Diver is named for. When a value is a JSON string — the
 `"{\"key\":\"value\"}"` that every API seems to produce eventually — it is detected
@@ -35,7 +39,7 @@ window of its own, rendered as a full tree. Escaped JSON nested inside escaped J
 works too: the views stack, each labelled with its depth. No copy-pasting into an
 unescaper, no losing your place.
 
-**See the shape before the detail**
+See the shape before the detail
 
 A bar above the tree gives you one button per depth, showing how many objects and
 arrays live at that level. Open everything to depth 2 and take in the whole document
@@ -44,17 +48,17 @@ object shows a miniature of its contents without expanding it, and the minimap i
 sidebar turns the entire document into a colour-coded overview you can click to
 navigate.
 
-**Edit in place, as text, or two documents at once**
+Edit in place, as text, or two documents at once
 
 Four modes, one switch:
 
-- **View** — read-only browsing, copying and zooming
-- **Edit** — click a value to change it inline; drag a row by its handle to move a
+- View — read-only browsing, copying and zooming
+- Edit — click a value to change it inline; drag a row by its handle to move a
   node before, inside or after another one
-- **Raw** — the JSON as text, for when it is simply faster to type
-- **Split** — a second document beside the first, with nodes draggable between them
+- Raw — the JSON as text, for when it is simply faster to type
+- Split — a second document beside the first, with nodes draggable between them
 
-**Split: move nodes between two documents**
+Split: move nodes between two documents
 
 Split opens a second document beside the one you have open. Drag a node by its handle
 from one pane into the other and it moves there — out of the pane it came from, into
@@ -64,14 +68,14 @@ puts a cross-pane move back on both sides at once. It is how you lift a block ou
 API response and drop it into a config file without a round trip through an editor.
 
 Editing also reaches across documents. Copy JSON anywhere — a node from another
-window, a fragment from a chat message — press **+** on the row you want it next to,
+window, a fragment from a chat message — press + on the row you want it next to,
 and choose whether it goes before, inside or after. Inserting into an object asks for
 a key, the new node is highlighted so you can see where it landed, and anything that
 would break a loaded schema is refused before it is applied.
 
 Everything is undoable with Ctrl+Z, whichever mode you made the change in.
 
-**Validate against a JSON Schema**
+Validate against a JSON Schema
 
 Paste a schema into the sidebar and the document is checked as you go. Violations are
 highlighted in the tree with the reason on hover, a badge in the toolbar jumps to the
@@ -80,35 +84,34 @@ before it lands. Supported keywords include type, const, enum, properties,
 patternProperties, additionalProperties, required, items and prefixItems, minItems,
 maxItems, oneOf, anyOf and internal $ref.
 
-**Watch the clipboard**
+Watch the clipboard
 
 Turn on Watch and JSON copied anywhere — your editor, a terminal, a browser — is
 loaded automatically, with no window to switch to and nothing to paste. Only objects
 and arrays are picked up, the same clipboard contents are never loaded twice, and
 Ctrl+Z always brings back what was on screen before.
 
-**Made for Windows**
+Made for Windows
 
 - Double-click a `.json` file to open it, once you associate the type
 - Ctrl+S writes straight back over the original file (UTF-8, no BOM)
 - Another `.json` opens in a new window; Ctrl+N gives you an empty one
 - Drag a file onto the window and it opens with its path intact, ready to save
 
-**Large documents stay usable**
+Large documents stay usable
 
 Containers with more than fifty children render the first fifty and fill in the rest
 as you scroll, so a file with tens of thousands of lines opens and scrolls like a
 small one.
 
-**Your data stays on your machine**
+Your data stays on your machine
 
 No account, no sign-in, no telemetry, and nothing is uploaded anywhere. JSON Diver
 works fully offline; what you load stays in local storage on this device until you
 clear it. The only time it touches the network is when you click one of the two links
 in the sidebar, which open in your default browser.
 
-JSON Diver is open source. Source code, issues and release notes:
-https://github.com/motohasystem/json-diver
+JSON Diver is open source; the code, issues and release notes are public on GitHub.
 
 ---
 
