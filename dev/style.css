@@ -107,14 +107,16 @@ main { padding: 12px 16px; }
   gap: 8px 12px;
   flex-wrap: wrap;
 }
-.tree-toolbar .data-actions,
-.tree-toolbar .mode-actions {
+/* Split lifts .mode-actions out of the toolbar into #global-actions, so these are
+   scoped to both surfaces rather than to the toolbar it happens to sit in. */
+.data-actions,
+.mode-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
-.tree-toolbar button {
+:is(.tree-toolbar, .global-actions) button {
   background: var(--panel-2);
   color: var(--fg);
   border: 1px solid var(--border);
@@ -123,10 +125,10 @@ main { padding: 12px 16px; }
   font-size: 12px;
   cursor: pointer;
 }
-.tree-toolbar button:hover { border-color: var(--accent); }
-.tree-toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
-.tree-toolbar button:disabled:hover { border-color: var(--border); }
-.tree-toolbar button.active {
+:is(.tree-toolbar, .global-actions) button:hover { border-color: var(--accent); }
+:is(.tree-toolbar, .global-actions) button:disabled { opacity: 0.4; cursor: not-allowed; }
+:is(.tree-toolbar, .global-actions) button:disabled:hover { border-color: var(--border); }
+:is(.tree-toolbar, .global-actions) button.active {
   border-color: var(--accent);
   background: rgba(122, 162, 255, 0.18);
   color: var(--accent);
