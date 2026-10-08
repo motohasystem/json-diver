@@ -4,3 +4,7 @@
 # OS / editor cruft
 Thumbs.db
 .DS_Store
+
+# direnv (reads credentials from outside the repo)
+.envrc
+.direnv/

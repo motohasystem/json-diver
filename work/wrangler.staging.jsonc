@@ -1,0 +1,20 @@
+// Staging deploy for JSON Diver: a separate Worker that serves dev/ straight from
+// this working tree, so changes can be tried without pushing to main (which would
+// deploy production via Workers Builds).
+//
+//   npx wrangler@latest deploy --config work/wrangler.staging.jsonc
+//
+// Credentials come from direnv: .envrc sources ~/.config/cloudflare/ddssk.env,
+// which exports a Workers-scoped CLOUDFLARE_API_TOKEN and the account id below.
+// In a shell without direnv, source that file first.
+{
+  // Pinned so wrangler fails with a clear message when the shell is logged into a
+  // different Cloudflare account, instead of a bare "Authentication error".
+  "account_id": "6e5fa0f6399400661877139e2788e58f",
+  "name": "json-diver-staging",
+  "compatibility_date": "2026-09-16",
+  "assets": {
+    "directory": "/home/ddssk/projects/json-diver/dev"
+  },
+  "observability": { "enabled": true }
+}
