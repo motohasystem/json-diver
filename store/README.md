@@ -12,7 +12,7 @@ Everything Partner Center asks for, ready to paste or upload.
 | `screenshots/*.png` | スクリーンショット (PC) — 1366×768 |
 | `trailer-thumbnail-1920x1080.png` | トレーラーのサムネイル (必須) |
 | `hero-1920x1080.png` | 16:9 スーパーヒーローアート |
-| （リポジトリ外） `work/JSON-Diver-trailer-v0.7.0.mp4` | トレーラー本体 — 大きいので git には入れていない |
+| （リポジトリ外） `work/JSON-Diver-trailer-en-v0.8.0.mp4` | トレーラー本体 — 大きいので git には入れていない |
 
 Two languages are listed because a ja + en-US pair widens search coverage: the same
 build serves both, only the listing text differs.
@@ -52,8 +52,19 @@ node shots.mjs   # see the session scratchpad, or re-run the same Playwright ste
 
 ## Trailer
 
-`work/JSON-Diver-trailer-v0.7.0.mp4` — 53.0s, 1920×1080, H.264 High / yuv420p, silent
+`work/JSON-Diver-trailer-en-v0.8.0.mp4` — 52.4s, 1920×1080, H.264 High / yuv420p, silent
 AAC-LC stereo 48 kHz, closed GOP 12, moov atom first. Within every Store requirement.
+
+Three cuts exist, from the same script and the same timings:
+
+| File | Captions | Use |
+| --- | --- | --- |
+| `JSON-Diver-trailer-en-v0.8.0.mp4` | burnt in, English | the Store, which has no subtitle track |
+| `JSON-Diver-trailer-ja-v0.8.0.mp4` | burnt in, Japanese | anywhere subtitles cannot be selected |
+| `JSON-Diver-trailer-nocaption-v0.8.0.mp4` | none | YouTube and the blog, with `trailer-{en,ja}.srt` |
+
+The caption-free cut also drops the tagline from the end card, because that line is
+language-specific; it is the last cue of each .srt instead.
 
 Title to enter alongside it (max 255 chars):
 
@@ -71,7 +82,15 @@ centred — hence the abstract composition rather than a screenshot.
 Both the trailer and the hero art are generated, not hand-edited:
 `work/record-trailer.mjs` drives the live app and bakes the captions in as DOM
 overlays; `work/render-hero.mjs` renders the artwork as SVG. Re-run either after a
-UI change.
+UI change:
+
+```bash
+node record-trailer.mjs en     # or ja, or none for the subtitle-track cut
+node make-srt.mjs <captions-none.json> <nocaption.mp4> .   # regenerates both .srt
+```
+
+The subtitle timings are the ones the recording measured, not a transcription of the
+script's waits, so they follow a change in scene timing on their own.
 
 ## Before uploading
 
