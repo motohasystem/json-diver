@@ -66,6 +66,12 @@ Three cuts exist, from the same script and the same timings:
 The caption-free cut also drops the tagline from the end card, because that line is
 language-specific; it is the last cue of each .srt instead.
 
+Caption text and faces live in `work/captions.mjs`, which both scripts import, so the
+burnt-in lines and the subtitle tracks cannot drift apart. The Japanese lines are
+です・ます調 and set in a bold serif (Noto Serif CJK JP): mincho's thin horizontal
+strokes are what the 1536 -> 1920 upscale and H.264 blur away first, so weight matters
+there more than it does for the English sans.
+
 Title to enter alongside it (max 255 chars):
 
 ```
