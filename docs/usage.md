@@ -64,7 +64,7 @@ toolbar, or press **v** / **e** / **r** / **s**.
 | Mode | Purpose |
 | --- | --- |
 | **View** | Read-only: collapse, copy, zoom |
-| **Edit** | Inline value editing and drag & drop node moves |
+| **Edit** | Inline value and key editing, deleting, and drag & drop node moves |
 | **Raw** | Edit the raw JSON text directly |
 | **Split** | Two documents side by side, with nodes draggable from one to the other |
 
@@ -85,6 +85,17 @@ toolbar, or press **v** / **e** / **r** / **s**.
   - **Enter** commits, **Esc** cancels
   - Strings containing newlines open a multi-line editor; **Ctrl+Enter** commits
   - Booleans are edited with a true/false picker
+- **Click a key** to rename it (object members only — array indices are positions,
+  not names)
+  - The member keeps its place in the object
+  - **Enter** commits, **Esc** cancels. An empty name, or one already used by a
+    sibling, is refused and the editor stays open so you can fix it
+- **× on a row deletes that node** and everything under it (the root has none)
+  - Or **click a row** to select it and press **Delete**. The selection then moves
+    to the next sibling (or the previous one, or the parent), so pressing Delete
+    again keeps going
+  - Both are undoable with Ctrl+Z, and a delete that would add schema violations is
+    rolled back
 - Drag the **⋮⋮ handle** at the start of a row to move a node
   - The drop position decides the operation: insert before / move inside /
     insert after (drop on the top, middle or bottom of the target row)
@@ -265,6 +276,7 @@ The lower part of the right sidebar shows the whole tree in miniature.
 | **Enter** | Commit an inline edit |
 | **Ctrl+Enter** | Commit in the multi-line editor |
 | **Esc** | Cancel an edit / close one modal level |
+| **Delete** | [Edit mode] Delete the selected node |
 | **Ctrl+S** | [Desktop edition] Save to file |
 | **Ctrl+N** | [Desktop edition] Open a new window |
 
@@ -317,4 +329,4 @@ The desktop edition is the same screen as the browser edition plus file handling
 
 ---
 
-*This document describes the features as of v0.8.0.*
+*This document describes the features as of v0.9.0.*
