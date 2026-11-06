@@ -46,6 +46,16 @@ Just open `index.html` in a browser.
   already-seen text and anything this app copied itself, then loads via
   `History.pushBefore()` so Ctrl+Z undoes it
 
+### Edit mode (also in Split)
+- Click a string / number / boolean value to edit it inline
+- Click an object key to rename it; the key keeps its position. Empty or
+  duplicate names are refused (Enter keeps the editor open, Esc cancels).
+  Array indices are not renamable
+- The row's `×` button deletes the node and its subtree (not shown on the root).
+  Or click a row's empty space to select it and press Delete; the selection
+  moves to the next sibling so you can keep deleting
+- Every edit goes through the schema guard and is undoable with Ctrl+Z
+
 ### Escaped JSON (🪆)
 - When a value is a JSON string (starts with `{` / `[` and parses), it is detected
   automatically and marked with the 🪆 icon

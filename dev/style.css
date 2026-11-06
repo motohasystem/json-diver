@@ -476,6 +476,15 @@ body.edit-mode .tree .val.val-boolean:hover {
   outline: 1px solid rgba(122, 162, 255, 0.4);
   border-radius: 3px;
 }
+/* Key rename (edit mode) — array indices stay plain */
+body.edit-mode .tree .key:not(.array-idx) { cursor: text; }
+body.edit-mode .tree .row > .key:not(.array-idx):hover {
+  background: rgba(122, 162, 255, 0.14);
+  outline: 1px solid rgba(122, 162, 255, 0.4);
+  border-radius: 3px;
+}
+.key.editing { display: none; }
+.val-editor.key-editor { color: var(--key); }
 .val.editing { display: none; }
 .val-editor {
   font-family: var(--mono);
@@ -705,6 +714,19 @@ body.dnd-active { user-select: none; }
 /* Paste-insert is an Edit-mode action only */
 .row-act-paste { display: none; }
 body.edit-mode .row-act-paste { display: inline-block; }
+
+/* Row selected for the Delete key (edit mode) */
+body.edit-mode .row.selected {
+  background: rgba(122, 162, 255, 0.18);
+  box-shadow: inset 2px 0 0 var(--accent);
+  border-radius: 3px;
+}
+
+/* Delete is Edit-mode only as well, and turns red on hover */
+.row-act-delete { display: none; }
+body.edit-mode .row-act-delete { display: inline-block; }
+.row-act-delete { font-size: 14px; }
+.row-act-delete:hover { color: var(--err); border-color: var(--err); background: rgba(255, 107, 129, 0.16); }
 
 /* Popup for inserting clipboard JSON at a chosen position */
 .paste-pop {

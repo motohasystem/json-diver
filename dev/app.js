@@ -684,6 +684,7 @@
         isIdx ? "key array-idx" : "key",
         isIdx ? `[${key}]` : key
       );
+      if (!isIdx) attachKeyRename(keyLabel, node);
       row.appendChild(keyLabel);
       row.appendChild(el("span", "sep", ":"));
     } else {
@@ -715,6 +716,14 @@
     }
 
     row.appendChild(buildRowActions(node, isContainer));
+
+    // Edit mode: clicking a row - or the blank space to its right, which belongs
+    // to the .node since rows are inline-flex - selects it for the Delete key.
+    // Keys and values open their editors first and stop the click there.
+    if (!isRoot) {
+      row.addEventListener("click", () => selectNode(node));
+      node.addEventListener("click", (e) => { if (e.target === node) selectNode(node); });
+    }
 
     node.appendChild(row);
 
@@ -826,6 +835,7 @@
     const actions = el("span", "row-actions");
     actions.appendChild(buildCopyButton(node));
     actions.appendChild(buildPasteButton(node)); // CSS hides it outside Edit mode
+    if (node.dataset.path !== "[]") actions.appendChild(buildDeleteButton(node)); // Edit mode only too
     if (isContainer) actions.appendChild(buildSiblingToggleButton(node));
     return actions;
   }
@@ -1177,6 +1187,132 @@
     });
     editor.addEventListener("blur", () => finish(true));
     editor.focus();
+  }
+
+  // ---------- Key rename (edit mode) ----------
+
+  // Click an object key to rename it in place. Array indices are positions,
+  // not names, so they never get here.
+  function attachKeyRename(keySpan, node) {
+    keySpan.addEventListener("click", (e) => {
+      if (state.mode !== "edit" && state.mode !== "split") return;
+      if (keySpan.classList.contains("editing")) return;
+      e.stopPropagation();
+      hideTooltip();
+      startKeyRename(node, keySpan);
+    });
+  }
+
+  function startKeyRename(node, keySpan) {
+    const path = parsePath(node);
+    if (path.length === 0 || typeof Path.last(path) !== "string") return;
+    const current = Path.last(path);
+
+    const editor = el("input", "val-editor key-editor");
+    editor.type = "text";
+    editor.spellcheck = false;
+    editor.value = current;
+
+    keySpan.classList.add("editing");
+    keySpan.parentNode.insertBefore(editor, keySpan.nextSibling);
+
+    const autoSize = () => {
+      const px = Math.max(60, Math.min(400, editor.value.length * 8 + 28));
+      editor.style.width = px + "px";
+    };
+    autoSize();
+    editor.addEventListener("input", autoSize);
+    editor.focus();
+    editor.select();
+
+    let done = false;
+    const cleanup = () => {
+      editor.remove();
+      keySpan.classList.remove("editing");
+    };
+    const finish = (commit, source) => {
+      if (done) return;
+      const next = editor.value;
+      if (!commit || next === current) { done = true; cleanup(); return; }
+      const error = keyRenameError(node, path, next);
+      if (error) {
+        // Enter keeps the editor open so the name can be fixed; blur gives up.
+        if (source === "enter") { showToast(error); return; }
+        done = true; cleanup();
+        showToast(error);
+        return;
+      }
+      done = true;
+      cleanup();
+      commitKeyRename(node, path, next);
+    };
+    editor.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      else if (e.key === "Enter") { e.preventDefault(); finish(true, "enter"); }
+    });
+    editor.addEventListener("blur", () => finish(true, "blur"));
+    // Keep clicks inside the editor from reaching row handlers.
+    editor.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  function keyRenameError(node, path, next) {
+    if (next === "") return "Key cannot be empty";
+    const treeEl = node.closest(".tree");
+    const parent = treeEl && Path.parent(docRootOf(treeEl), path);
+    if (!parent || typeof parent !== "object" || Array.isArray(parent)) return "Cannot rename here";
+    if (Object.prototype.hasOwnProperty.call(parent, next)) return `Key "${next}" already exists`;
+    return null;
+  }
+
+  // Rebuild the object so the renamed key keeps its position.
+  function renameKeyInPlace(obj, oldKey, newKey) {
+    const entries = Object.entries(obj);
+    for (const k of Object.keys(obj)) delete obj[k];
+    for (const [k, v] of entries) obj[k === oldKey ? newKey : k] = v;
+  }
+
+  function commitKeyRename(node, path, newKey) {
+    const treeEl = node.closest(".tree");
+    if (!treeEl) return;
+    const oldKey = Path.last(path);
+    const isModal = treeEl.classList.contains("modal-tree");
+
+    // Same two-stage guard as insert / drag: try it on a draft, keep it only if
+    // the schema does not get worse.
+    const draft = cloneData(docRootOf(treeEl));
+    renameKeyInPlace(Path.parent(draft, path), oldKey, newKey);
+    if (!schemaOkFor(treeEl, draft)) return;
+
+    History.pushBefore([historyPaneOf(treeEl)]);
+    renameKeyInPlace(Path.parent(docRootOf(treeEl), path), oldKey, newKey);
+
+    // A lazily-loaded container below this node has its child paths baked into
+    // closures, so patching data-path would leave later batches stale. Rebuild.
+    if (node.querySelector(".lazy-sentinel")) {
+      afterDocChange(treeEl);
+      flashNode(treeEl, [...path.slice(0, -1), newKey]);
+      return;
+    }
+
+    // Otherwise patch in place so scroll and collapse state survive: relabel the
+    // key and rewrite the path segment in this node and every descendant.
+    const depth = path.length - 1;
+    for (const n of [node, ...node.querySelectorAll(".node[data-path]")]) {
+      const p = parsePath(n);
+      if (p.length > depth) { p[depth] = newKey; n.dataset.path = JSON.stringify(p); }
+    }
+    const keySpan = node.querySelector(":scope > .row > .key");
+    if (keySpan) keySpan.textContent = newKey;
+
+    if (isModal) {
+      propagateModalChange(treeEl);
+      syncPaneMirror("a");
+    } else {
+      syncPaneMirror(paneIdOf(treeEl));
+    }
+    revalidate();
+    scheduleMinimapRedraw();
+    refreshDiff();
   }
 
   function treeRootValueFor(node) {
@@ -2141,6 +2277,109 @@
     },
   };
 
+  // ---------- Delete a node (Edit mode) ----------
+
+  function buildDeleteButton(node) {
+    // Text glyph rather than an emoji so it can take the hover colour from CSS.
+    const btn = el("button", "row-act row-act-delete", "\u00d7");
+    btn.type = "button";
+    attachActionTooltip(btn, "Delete",
+      "Removes this node and everything under it \u2014 Ctrl+Z brings it back");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hideTooltip();
+      deleteNode(node);
+    });
+    return btn;
+  }
+
+  // The node the Delete key acts on. One at a time, across every tree.
+  let selectedNode = null;
+  function selectNode(node) {
+    if (state.mode !== "edit" && state.mode !== "split") return;
+    clearSelection();
+    if (!node || !node.isConnected || node.dataset.path === "[]") return;
+    selectedNode = node;
+    node.querySelector(":scope > .row").classList.add("selected");
+  }
+  function clearSelection() {
+    if (selectedNode) {
+      const row = selectedNode.querySelector(":scope > .row");
+      if (row) row.classList.remove("selected");
+    }
+    selectedNode = null;
+  }
+  function nodeAtPath(treeEl, path) {
+    const want = JSON.stringify(path);
+    return Array.from(treeEl.querySelectorAll(".node[data-path]"))
+      .find((n) => n.dataset.path === want) || null;
+  }
+
+  // Delete removes the selected node, then moves the selection to whatever took
+  // its place (next sibling, else previous, else the parent) so it can repeat.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Delete") return;
+    const tag = e.target && e.target.tagName;
+    if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+    if (e.target && e.target.isContentEditable) return;
+    if (state.mode !== "edit" && state.mode !== "split") return;
+    if (!selectedNode || !selectedNode.isConnected) { clearSelection(); return; }
+    e.preventDefault();
+    const node = selectedNode;
+    const treeEl = node.closest(".tree");
+    const path = parsePath(node);
+    const sibs = siblingNodesOf(node);
+    const i = sibs.indexOf(node);
+    const nextKey = sibs[i + 1] ? Path.last(parsePath(sibs[i + 1])) : null;
+    const prevKey = i > 0 ? Path.last(parsePath(sibs[i - 1])) : null;
+    if (!deleteNode(node)) return;
+    const parentPath = path.slice(0, -1);
+    const last = Path.last(path);
+    let target = null;
+    if (typeof last === "number") {
+      // Array: the next element slid into this index.
+      target = nodeAtPath(treeEl, [...parentPath, nextKey !== null ? last : last - 1]);
+    } else if (nextKey !== null) target = nodeAtPath(treeEl, [...parentPath, nextKey]);
+    else if (prevKey !== null) target = nodeAtPath(treeEl, [...parentPath, prevKey]);
+    if (!target) target = nodeAtPath(treeEl, parentPath);
+    selectNode(target);
+  });
+
+  function deleteNode(node) {
+    if (state.mode !== "edit" && state.mode !== "split") return;
+    const treeEl = node.closest(".tree");
+    const path = parsePath(node);
+    if (!treeEl || path.length === 0) return false;
+    if (node === selectedNode) clearSelection();
+
+    // Draft first, like insert and drag: keep it only if the schema holds up.
+    const draft = cloneData(docRootOf(treeEl));
+    Path.removeAt(draft, path);
+    if (!schemaOkFor(treeEl, draft)) return false;
+
+    History.pushBefore([historyPaneOf(treeEl)]);
+    const parentEl = node.parentElement && node.parentElement.closest(".node");
+    const parentVal = Path.parent(docRootOf(treeEl), path);
+    Path.removeAt(docRootOf(treeEl), path);
+
+    // Removing an array element renumbers everything after it, so rebuild.
+    // An object member leaves its siblings' paths untouched: drop just that
+    // node so scroll and collapse state survive.
+    if (Array.isArray(parentVal) || paneIdOf(treeEl) === null) {
+      afterDocChange(treeEl);
+      return true;
+    }
+    node.remove();
+    const count = parentEl && parentEl.querySelector(":scope > .row > .count");
+    if (count) count.textContent = `{${Object.keys(parentVal).length}}`;
+    const id = paneIdOf(treeEl);
+    syncPaneMirror(id);
+    if (id === "a") { revalidate(); scheduleMinimapRedraw(); }
+    renderDepthBar(depthBarOfPane(id), treeEl, rootOfPane(id));
+    refreshDiff();
+    return true;
+  }
+
   // ---------- Paste a node from the clipboard (Edit mode) ----------
 
   // Insert JSON copied from anywhere - another window, another app - as a node at a
@@ -2446,6 +2685,7 @@
     if (newMode === "split") { while (modalStack.length > 0) closeTopModal(); }
 
     state.mode = newMode;
+    clearSelection();
     // Split is an editing mode, so it carries the edit affordances too.
     document.body.classList.toggle("edit-mode", newMode === "edit" || newMode === "split");
     document.body.classList.toggle("raw-mode", newMode === "raw");
